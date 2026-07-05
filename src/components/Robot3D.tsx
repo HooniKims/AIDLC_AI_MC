@@ -23,9 +23,10 @@ function detectWebGLSupport() {
 // Tripo 모델은 +X를 바라보므로 -90° 돌려 +Z(카메라)를 보게 한다
 const MODEL_ROTATION_Y = -Math.PI / 2;
 
+// 텍스처는 얼굴 요소(두 눈 중점) 기준 대칭 크롭 — 시선이 정면을 향한다
 const FACE_PLANE = {
-  width: 0.52,
-  height: 0.52 * (343 / 512),
+  width: 0.41,
+  height: 0.41 * (436 / 512),
   position: [0, 0.6, 0.262] as [number, number, number],
   tiltX: -0.15
 };
