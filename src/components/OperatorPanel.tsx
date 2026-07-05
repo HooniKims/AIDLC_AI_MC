@@ -1,0 +1,130 @@
+import type { AudienceQuestion, RobotState } from "../types";
+import { canGenerateAnswer } from "../lib/mcFlow";
+import { StatusBadge } from "./StatusBadge";
+
+interface OperatorPanelProps {
+  questions: AudienceQuestion[];
+  selectedQuestion: AudienceQuestion | null;
+  manualQuestion: string;
+  draftAnswer: string;
+  approvedAnswer: string;
+  robotState: RobotState;
+  error: string;
+  isGenerating: boolean;
+  isSpeaking: boolean;
+  onSelectQuestion: (question: AudienceQuestion) => void;
+  onManualQuestionChange: (value: string) => void;
+  onAddManualQuestion: () => void;
+  onGenerateAnswer: () => void;
+  onDraftAnswerChange: (value: string) => void;
+  onApproveDraft: () => void;
+  onSpeak: () => void;
+}
+
+export function OperatorPanel({
+  questions,
+  selectedQuestion,
+  manualQuestion,
+  draftAnswer,
+  approvedAnswer,
+  robotState,
+  error,
+  isGenerating,
+  isSpeaking,
+  onSelectQuestion,
+  onManualQuestionChange,
+  onAddManualQuestion,
+  onGenerateAnswer,
+  onDraftAnswerChange,
+  onApproveDraft,
+  onSpeak
+}: OperatorPanelProps) {
+  const selectedText = selectedQuestion?.text || manualQuestion;
+  const canGenerate = canGenerateAnswer(selectedText) && !isGenerating;
+  const canApprove = draftAnswer.trim().length > 0;
+  const canSpeak = approvedAnswer.trim().length > 0 && !isSpeaking;
+
+  return (
+    <aside className="operator-panel" aria-label="운영자 콘솔">
+      <div className="operator-panel__header">
+        <div>
+          <p className="panel-kicker">Operator</p>
+          <h2>운영자 콘솔</h2>
+        </div>
+        <StatusBadge state={robotState} />
+      </div>
+
+      <section className="control-section">
+        <div className="section-heading">
+          <h3>질문 큐</h3>
+          <span>{questions.length}개</span>
+        </div>
+        <div className="question-list">
+          {questions.map((question) => (
+            <button
+              className={`question-chip ${
+                selectedQuestion?.id === question.id ? "question-chip--selected" : ""
+              }`}
+              key={question.id}
+              type="button"
+              onClick={() => onSelectQuestion(question)}
+            >
+              <span>{question.author}</span>
+              {question.text}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="control-section">
+        <div className="section-heading">
+          <h3>직접 입력</h3>
+        </div>
+        <div className="manual-input-row">
+          <input
+            value={manualQuestion}
+            onChange={(event) => onManualQuestionChange(event.target.value)}
+            placeholder="현장 질문을 입력하세요"
+            aria-label="현장 질문 입력"
+          />
+          <button type="button" onClick={onAddManualQuestion} disabled={!canGenerateAnswer(manualQuestion)}>
+            추가
+          </button>
+        </div>
+      </section>
+
+      <section className="control-section selected-question-box">
+        <div className="section-heading">
+          <h3>선택된 질문</h3>
+        </div>
+        <p>{selectedQuestion?.text || "질문을 선택하거나 직접 입력해 주세요."}</p>
+        <button className="primary-action" type="button" onClick={onGenerateAnswer} disabled={!canGenerate}>
+          {isGenerating ? "답변 생성 중" : "AI 답변 생성"}
+        </button>
+      </section>
+
+      <section className="control-section">
+        <div className="section-heading">
+          <h3>답변 승인</h3>
+          <span>수정 가능</span>
+        </div>
+        <textarea
+          value={draftAnswer}
+          onChange={(event) => onDraftAnswerChange(event.target.value)}
+          placeholder="AI가 만든 답변이 여기에 표시됩니다."
+          aria-label="AI 답변 초안"
+        />
+        <div className="action-row">
+          <button type="button" onClick={onApproveDraft} disabled={!canApprove}>
+            승인
+          </button>
+          <button className="primary-action" type="button" onClick={onSpeak} disabled={!canSpeak}>
+            {isSpeaking ? "말하는 중" : "로봇 말하기"}
+          </button>
+        </div>
+      </section>
+
+      {error ? <p className="operator-error">{error}</p> : null}
+    </aside>
+  );
+}
