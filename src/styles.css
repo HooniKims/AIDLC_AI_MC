@@ -280,8 +280,8 @@ button:disabled {
   position: absolute;
   z-index: 2;
   left: clamp(7%, 9vw, 14%);
-  bottom: 16%;
-  width: min(42vw, 430px);
+  bottom: 58px;
+  width: min(34vw, 360px);
   min-width: 250px;
   transform-origin: center bottom;
   animation: robot-idle 4.2s ease-in-out infinite;
@@ -289,13 +289,14 @@ button:disabled {
 
 .robot-stage--full .robot-wrap {
   left: 12vw;
-  bottom: 15vh;
-  width: min(40vw, 560px);
+  bottom: 150px;
+  width: min(30vw, 440px);
 }
 
 .robot-stage--compact .robot-wrap {
   left: 7%;
-  width: 250px;
+  bottom: 118px;
+  width: 230px;
 }
 
 .robot-wrap--thinking {
@@ -417,6 +418,19 @@ button:disabled {
   box-shadow: 0 14px 0 rgba(42, 0, 80, 0.36);
 }
 
+.demo-stage-card .stage-topline {
+  justify-content: flex-end;
+}
+
+.demo-stage-card .stage-topline > div {
+  display: none;
+}
+
+.robot-stage--preview .stage-answer {
+  max-width: min(760px, 100%);
+  font-size: clamp(18px, 2vw, 30px);
+}
+
 .operator-panel {
   display: flex;
   flex-direction: column;
@@ -481,8 +495,8 @@ button:disabled {
 
 .question-list {
   display: grid;
-  gap: 8px;
-  max-height: 230px;
+  gap: 6px;
+  max-height: 300px;
   overflow: auto;
 }
 
@@ -490,7 +504,7 @@ button:disabled {
   display: grid;
   gap: 4px;
   width: 100%;
-  padding: 12px;
+  padding: 9px 12px;
   border: 2px solid transparent;
   border-radius: 10px;
   background: #f6efff;
@@ -675,8 +689,8 @@ textarea:focus {
 
   .robot-wrap {
     left: 50%;
-    bottom: 160px;
-    width: 260px;
+    bottom: 170px;
+    width: 230px;
     transform: translateX(-50%);
   }
 

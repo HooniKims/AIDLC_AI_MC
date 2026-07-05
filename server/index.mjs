@@ -30,7 +30,11 @@ ${eventBrief}
 `.trim();
 
 function envValue(env, key, fallback) {
-  return env?.[key] || process.env[key] || fallback;
+  if (env && Object.prototype.hasOwnProperty.call(env, key)) {
+    return env[key] ?? fallback;
+  }
+
+  return process.env[key] || fallback;
 }
 
 function hasApiKey(env) {
