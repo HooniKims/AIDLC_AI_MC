@@ -45,25 +45,20 @@ describe("mcFlow", () => {
     ]);
   });
 
-  it("shows only the current subtitle chunk while speaking", () => {
+  it("shows only the current sentence while speaking", () => {
     const answer = "첫 번째 안내입니다. 두 번째 안내입니다. 세 번째 안내입니다.";
 
     expect(stageCaptionLinesForKorean(answer, { isSpeaking: true, cueIndex: 0, maxLines: 2 })).toEqual([
-      "첫 번째 안내입니다.",
-      "두 번째 안내입니다."
+      "첫 번째 안내입니다."
     ]);
     expect(stageCaptionLinesForKorean(answer, { isSpeaking: true, cueIndex: 1, maxLines: 2 })).toEqual([
-      "세 번째 안내입니다."
+      "두 번째 안내입니다."
     ]);
   });
 
-  it("keeps the full caption available when the robot is not speaking", () => {
+  it("hides speaking subtitles after the final sentence", () => {
     const answer = "첫 번째 안내입니다. 두 번째 안내입니다. 세 번째 안내입니다.";
 
-    expect(stageCaptionLinesForKorean(answer, { isSpeaking: false, cueIndex: 0, maxLines: 2 })).toEqual([
-      "첫 번째 안내입니다.",
-      "두 번째 안내입니다.",
-      "세 번째 안내입니다."
-    ]);
+    expect(stageCaptionLinesForKorean(answer, { isSpeaking: true, cueIndex: 3, maxLines: 2 })).toEqual([]);
   });
 });

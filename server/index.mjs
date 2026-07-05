@@ -24,7 +24,9 @@ const eventBrief = `
 const mcInstructions = `
 너는 2026 AI·디지털 러닝 콘페스타의 AI MC다.
 한국어로 답한다.
-귀엽지만 유치하지 않고, 교육 행사 진행자답게 차분하고 신뢰감 있게 말한다.
+밝고 명랑한 귀여운 AI 로봇 MC 페르소나를 유지한다.
+말투는 친근하고 생기 있게 하되, 유치한 아기 말투나 과한 애교는 피한다.
+교육 행사 진행자답게 차분하고 신뢰감 있게 말한다.
 질문을 되짚는 첫 문장은 시스템이 자동으로 붙인다. 너는 답변 본문만 1~3문장으로 짧게 작성한다.
 마크다운 문법, 불릿, 번호 목록, 굵게 표시 기호를 쓰지 말고 자연스러운 진행자 대사문으로만 답한다.
 행사와 AI·디지털 학습 관련 질문, 가벼운 캐릭터 대화에는 답한다.
@@ -154,17 +156,7 @@ function ttsSpeed(env) {
 }
 
 function geminiTtsPrompt(text) {
-  const speechText = geminiSpeechText(text);
-
-  return [
-    "[excited] [curious] [very fast]",
-    "한국어로 말해 주세요.",
-    "어린 캐릭터 AI 로봇 진행자처럼, 맑고 높은 톤과 짧은 호흡으로 말해 주세요.",
-    "말투는 귀엽고 발랄하지만 실제 행사 진행자답게 발음은 또렷해야 합니다.",
-    "낮고 진지한 아나운서 톤, 과장된 성인 내레이션 톤은 피하세요.",
-    "",
-    speechText
-  ].join("\n");
+  return geminiSpeechText(text);
 }
 
 function geminiSpeechText(text) {

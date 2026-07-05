@@ -110,7 +110,8 @@ describe("AI MC API", () => {
     expect(openai.responses.create).toHaveBeenCalledWith(
       expect.objectContaining({
         model: "gpt-5.4-mini",
-        reasoning: { effort: "low" }
+        reasoning: { effort: "low" },
+        instructions: expect.stringContaining("밝고 명랑")
       })
     );
   });
@@ -180,8 +181,11 @@ describe("AI MC API", () => {
     expect(body.model).toBe("gemini-2.5-flash-preview-tts");
     expect(body.stream).toBeUndefined();
     expect(body.generation_config.speech_config[0].voice).toBe("Puck");
-    expect(body.input).toContain("어린 캐릭터");
-    expect(body.input).toContain("[very fast]");
+    expect(body.input).toBe("안녕하세요. 에이아이 엠씨입니다.");
+    expect(body.input).not.toContain("밝고 명랑");
+    expect(body.input).not.toContain("어린 캐릭터");
+    expect(body.input).not.toContain("[very fast]");
+    expect(body.input).not.toContain("한국어로 말해 주세요");
     expect(fetchImpl.mock.calls[0][1].headers).not.toHaveProperty("Api-Revision");
   });
 

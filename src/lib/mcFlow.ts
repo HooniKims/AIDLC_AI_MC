@@ -75,6 +75,21 @@ export function stageLinesForKorean(text: string, maxChars = 26): string[] {
     );
 }
 
+function stageSentenceCuesForKorean(text: string, maxChars = 26): string[][] {
+  const normalized = protectKoreanStagePhrases(plainMcCopy(text).replace(/\s+/g, " ").trim());
+  if (!normalized) {
+    return [];
+  }
+
+  const sentenceMatches = normalized.match(/[^.!?。！？]+[.!?。！？]?/g) || [normalized];
+  return sentenceMatches
+    .map((sentence) => sentence.trim())
+    .filter(Boolean)
+    .map((sentence) =>
+      sentence.length > maxChars ? splitLongKoreanSentence(sentence, maxChars) : [sentence]
+    );
+}
+
 interface StageCaptionOptions {
   isSpeaking?: boolean;
   cueIndex?: number;
@@ -83,23 +98,13 @@ interface StageCaptionOptions {
 }
 
 export function stageCaptionLinesForKorean(text: string, options: StageCaptionOptions = {}): string[] {
-  const lines = stageLinesForKorean(text, options.maxChars);
-  if (!options.isSpeaking) {
-    return lines;
+  if (options.isSpeaking) {
+    const cues = stageSentenceCuesForKorean(text, options.maxChars);
+    const cueIndex = Math.max(0, Math.floor(options.cueIndex ?? 0));
+    return cues[cueIndex] || [];
   }
 
-  const maxLines = Math.max(1, options.maxLines ?? 2);
-  const chunks: string[][] = [];
-  for (let index = 0; index < lines.length; index += maxLines) {
-    chunks.push(lines.slice(index, index + maxLines));
-  }
-
-  if (!chunks.length) {
-    return [];
-  }
-
-  const cueIndex = Math.max(0, Math.floor(options.cueIndex ?? 0));
-  return chunks[Math.min(cueIndex, chunks.length - 1)];
+  return stageLinesForKorean(text, options.maxChars);
 }
 
 export function statusLabel(state: RobotState): string {

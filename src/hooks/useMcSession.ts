@@ -9,6 +9,8 @@ const defaultGreeting =
 const geminiVoiceStorageKey = "ai-mc-gemini-voice";
 const speechPrepareDelayMs = 350;
 const captionCueIntervalMs = 1850;
+const speakingFrameCount = 6;
+const speakingFrameIntervalMs = 145;
 
 interface SpeechAsset {
   key: string;
@@ -71,8 +73,8 @@ export function useMcSession() {
     }
 
     const id = window.setInterval(() => {
-      setLipFrame((frame) => nextLipFrame(frame, 12));
-    }, 130);
+      setLipFrame((frame) => nextLipFrame(frame, speakingFrameCount));
+    }, speakingFrameIntervalMs);
 
     return () => window.clearInterval(id);
   }, [robotState]);
