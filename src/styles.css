@@ -612,6 +612,7 @@ button:disabled {
 }
 
 input,
+select,
 textarea {
   width: 100%;
   border: 1px solid var(--confesta-border);
@@ -621,10 +622,23 @@ textarea {
   outline: none;
 }
 
-input {
+input,
+select {
   min-height: 3.3rem;
   padding: 0 1rem;
   font-size: 1.08rem;
+}
+
+select {
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--confesta-ink) 50%),
+    linear-gradient(135deg, var(--confesta-ink) 50%, transparent 50%);
+  background-position:
+    calc(100% - 20px) 50%,
+    calc(100% - 14px) 50%;
+  background-size: 6px 6px;
+  background-repeat: no-repeat;
 }
 
 textarea {
@@ -636,6 +650,7 @@ textarea {
 }
 
 input:focus,
+select:focus,
 textarea:focus {
   border-color: var(--confesta-grape);
   box-shadow: 0 0 0 3px rgba(142, 20, 220, 0.14);
@@ -655,6 +670,41 @@ textarea:focus {
 .operator-panel .primary-action {
   background: var(--confesta-lime-ribbon);
   color: var(--confesta-ink);
+}
+
+.voice-section {
+  gap: 12px;
+  background: color-mix(in oklch, var(--confesta-lime-ribbon), #fff 76%);
+}
+
+.voice-engine-card {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid rgba(142, 20, 220, 0.18);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: inset 7px 0 0 var(--confesta-lime);
+}
+
+.voice-engine-card strong {
+  font-size: 1.08rem;
+  line-height: 1.15;
+}
+
+.voice-engine-card span {
+  color: var(--confesta-muted);
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.gemini-voice-select {
+  display: grid;
+  gap: 7px;
+  color: var(--confesta-muted);
+  font-size: 0.92rem;
+  font-weight: 800;
 }
 
 .operator-panel .question-chip {

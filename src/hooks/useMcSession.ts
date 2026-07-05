@@ -6,6 +6,32 @@ import type { AudienceQuestion, RobotState } from "../types";
 const defaultGreeting =
   "안녕하세요. 저는 디지털 러닝 콘페스타의 AI MC입니다. 여러분의 질문을 골라 담아 무대에서 또렷하게 전해드릴게요.";
 
+const geminiVoiceStorageKey = "ai-mc-gemini-voice";
+
+function readStoredValue(key: string, fallback: string) {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return fallback;
+  }
+
+  try {
+    return window.localStorage.getItem(key) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeStoredValue(key: string, value: string) {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Storage can be unavailable in private/test environments.
+  }
+}
+
 export function useMcSession() {
   const [questions, setQuestions] = useState<AudienceQuestion[]>(sampleQuestions);
   const [selectedQuestion, setSelectedQuestion] = useState<AudienceQuestion | null>(sampleQuestions[0]);
@@ -17,6 +43,7 @@ export function useMcSession() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [lipFrame, setLipFrame] = useState(0);
+  const [geminiVoice, setGeminiVoiceState] = useState(() => readStoredValue(geminiVoiceStorageKey, "Leda"));
 
   useEffect(() => {
     if (robotState !== "speaking") {
@@ -32,6 +59,12 @@ export function useMcSession() {
   }, [robotState]);
 
   const currentQuestionText = selectedQuestion?.text || manualQuestion;
+
+  function setGeminiVoice(value: string) {
+    setGeminiVoiceState(value);
+    writeStoredValue(geminiVoiceStorageKey, value);
+    setError("");
+  }
 
   function selectQuestion(question: AudienceQuestion) {
     setSelectedQuestion(question);
@@ -118,7 +151,10 @@ export function useMcSession() {
       const response = await fetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text })
+        body: JSON.stringify({
+          text,
+          geminiVoice
+        })
       });
 
       if (!response.ok) {
@@ -149,6 +185,7 @@ export function useMcSession() {
       isGenerating,
       isSpeaking,
       lipFrame,
+      geminiVoice,
       currentQuestionText,
       selectQuestion,
       setManualQuestion,
@@ -156,6 +193,7 @@ export function useMcSession() {
       generateAnswer,
       setDraftAnswer,
       approveDraft,
+      setGeminiVoice,
       speak
     }),
     [
@@ -169,6 +207,7 @@ export function useMcSession() {
       isGenerating,
       isSpeaking,
       lipFrame,
+      geminiVoice,
       currentQuestionText
     ]
   );

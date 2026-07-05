@@ -43,12 +43,14 @@ function DemoScreen() {
           error={session.error}
           isGenerating={session.isGenerating}
           isSpeaking={session.isSpeaking}
+          geminiVoice={session.geminiVoice}
           onSelectQuestion={session.selectQuestion}
           onManualQuestionChange={session.setManualQuestion}
           onAddManualQuestion={session.addManualQuestion}
           onGenerateAnswer={session.generateAnswer}
           onDraftAnswerChange={session.setDraftAnswer}
           onApproveDraft={session.approveDraft}
+          onGeminiVoiceChange={session.setGeminiVoice}
           onSpeak={session.speak}
         />
       </section>
@@ -96,12 +98,14 @@ function OperatorScreen() {
           error={session.error}
           isGenerating={session.isGenerating}
           isSpeaking={session.isSpeaking}
+          geminiVoice={session.geminiVoice}
           onSelectQuestion={session.selectQuestion}
           onManualQuestionChange={session.setManualQuestion}
           onAddManualQuestion={session.addManualQuestion}
           onGenerateAnswer={session.generateAnswer}
           onDraftAnswerChange={session.setDraftAnswer}
           onApproveDraft={session.approveDraft}
+          onGeminiVoiceChange={session.setGeminiVoice}
           onSpeak={session.speak}
         />
       </div>

@@ -1,12 +1,14 @@
-import "dotenv/config";
 import express from "express";
 import OpenAI from "openai";
+import dotenv from "dotenv";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const defaultRootDir = path.resolve(__dirname, "..");
+
+dotenv.config();
 
 const eventBrief = `
 행사명: 2026 AI·디지털 러닝 콘페스타
@@ -38,8 +40,21 @@ function envValue(env, key, fallback) {
   return process.env[key] || fallback;
 }
 
+function refreshRuntimeEnv(env, rootDir) {
+  if (env === process.env) {
+    dotenv.config({
+      path: path.join(rootDir, ".env"),
+      override: true
+    });
+  }
+}
+
 function hasApiKey(env) {
   return Boolean(envValue(env, "OPENAI_API_KEY", "").trim());
+}
+
+function hasGeminiApiKey(env) {
+  return Boolean(envValue(env, "GEMINI_API_KEY", "").trim());
 }
 
 export function plainMcCopy(text) {
@@ -61,6 +76,76 @@ function ttsSpeed(env) {
   }
 
   return Math.min(4, Math.max(0.25, speed));
+}
+
+function geminiTtsPrompt(text) {
+  return [
+    "[excited, youthful, bright, very fast]",
+    "한국어로 말해 주세요.",
+    "귀엽고 어린 AI 로봇 마스코트 느낌으로, 맑고 높은 톤과 짧은 호흡으로 말해 주세요.",
+    "말투는 사랑스럽고 발랄하지만, 실제 행사 진행자답게 발음은 또렷해야 합니다.",
+    "낮고 진지한 아나운서 톤, 과장된 성인 내레이션 톤은 피하세요.",
+    "",
+    text
+  ].join("\n");
+}
+
+function wavFromPcm(pcm, sampleRate = 24000, channels = 1, bitsPerSample = 16) {
+  const byteRate = sampleRate * channels * (bitsPerSample / 8);
+  const blockAlign = channels * (bitsPerSample / 8);
+  const header = Buffer.alloc(44);
+
+  header.write("RIFF", 0);
+  header.writeUInt32LE(36 + pcm.length, 4);
+  header.write("WAVE", 8);
+  header.write("fmt ", 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(channels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(blockAlign, 32);
+  header.writeUInt16LE(bitsPerSample, 34);
+  header.write("data", 36);
+  header.writeUInt32LE(pcm.length, 40);
+
+  return Buffer.concat([header, pcm]);
+}
+
+async function createGeminiSpeech({ env, fetchImpl, text, voice }) {
+  const response = await fetchImpl("https://generativelanguage.googleapis.com/v1beta/interactions", {
+    method: "POST",
+    headers: {
+      "x-goog-api-key": envValue(env, "GEMINI_API_KEY", ""),
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: envValue(env, "GEMINI_TTS_MODEL", "gemini-3.1-flash-tts-preview"),
+      input: geminiTtsPrompt(text),
+      response_format: {
+        type: "audio"
+      },
+      generation_config: {
+        speech_config: [
+          {
+            voice: voice || envValue(env, "GEMINI_TTS_VOICE", "Leda")
+          }
+        ]
+      }
+    })
+  });
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(payload?.error?.message || "Gemini TTS 호출에 실패했습니다.");
+  }
+
+  const audioData = payload?.output_audio?.data || payload?.outputAudio?.data;
+  if (!audioData) {
+    throw new Error("Gemini TTS 응답에 오디오 데이터가 없습니다.");
+  }
+
+  return wavFromPcm(Buffer.from(audioData, "base64"));
 }
 
 function getOpenAIClient(openai, env) {
@@ -92,21 +177,28 @@ export function createApp(options = {}) {
   const app = express();
   const env = options.env || process.env;
   const rootDir = options.rootDir || defaultRootDir;
+  const fetchImpl = options.fetchImpl || globalThis.fetch;
 
   app.use(express.json({ limit: "1mb" }));
 
   app.get("/api/health", (_request, response) => {
+    refreshRuntimeEnv(env, rootDir);
     response.json({
       ok: true,
       model: envValue(env, "OPENAI_MODEL", "gpt-5.4-mini"),
       ttsModel: envValue(env, "OPENAI_TTS_MODEL", "gpt-4o-mini-tts"),
       ttsVoice: envValue(env, "OPENAI_TTS_VOICE", "shimmer"),
       ttsSpeed: ttsSpeed(env),
+      primaryTtsProvider: hasGeminiApiKey(env) ? "gemini" : "openai",
+      geminiTtsModel: envValue(env, "GEMINI_TTS_MODEL", "gemini-3.1-flash-tts-preview"),
+      geminiTtsVoice: envValue(env, "GEMINI_TTS_VOICE", "Leda"),
+      hasGeminiApiKey: hasGeminiApiKey(env),
       hasApiKey: hasApiKey(env)
     });
   });
 
   app.post("/api/generate-answer", async (request, response) => {
+    refreshRuntimeEnv(env, rootDir);
     const question = String(request.body?.question || "").trim();
 
     if (!question) {
@@ -145,6 +237,7 @@ export function createApp(options = {}) {
   });
 
   app.post("/api/tts", async (request, response) => {
+    refreshRuntimeEnv(env, rootDir);
     const text = plainMcCopy(request.body?.text || "");
 
     if (!text) {
@@ -160,6 +253,35 @@ export function createApp(options = {}) {
     }
 
     try {
+      const geminiVoice = String(request.body?.geminiVoice || "").trim() || envValue(env, "GEMINI_TTS_VOICE", "Leda");
+
+      if (hasGeminiApiKey(env)) {
+        try {
+          const buffer = await createGeminiSpeech({
+            env,
+            fetchImpl,
+            text,
+            voice: geminiVoice
+          });
+
+          response.setHeader("Content-Type", "audio/wav");
+          response.setHeader("X-AI-MC-TTS-Provider", "gemini");
+          response.send(buffer);
+          return;
+        } catch (geminiError) {
+          if (!hasApiKey(env)) {
+            throw geminiError;
+          }
+        }
+      }
+
+      if (!hasApiKey(env)) {
+        response.status(503).json({
+          error: "GEMINI_API_KEY 또는 OPENAI_API_KEY가 필요합니다. 프로젝트 폴더의 .env 파일에 키를 입력해 주세요."
+        });
+        return;
+      }
+
       const client = getOpenAIClient(options.openai, env);
       const audio = await client.audio.speech.create({
         model: envValue(env, "OPENAI_TTS_MODEL", "gpt-4o-mini-tts"),
@@ -172,6 +294,7 @@ export function createApp(options = {}) {
       const buffer = Buffer.from(await audio.arrayBuffer());
 
       response.setHeader("Content-Type", "audio/mpeg");
+      response.setHeader("X-AI-MC-TTS-Provider", "openai");
       response.send(buffer);
     } catch (error) {
       response.status(500).json({

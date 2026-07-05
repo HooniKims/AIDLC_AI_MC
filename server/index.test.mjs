@@ -23,6 +23,17 @@ function createMockOpenAI() {
   };
 }
 
+function createMockGeminiFetch() {
+  return vi.fn(async () => ({
+    ok: true,
+    json: async () => ({
+      output_audio: {
+        data: Buffer.from([1, 2, 3, 4]).toString("base64")
+      }
+    })
+  }));
+}
+
 describe("AI MC API", () => {
   it("returns a clear 503 when the OpenAI API key is missing", async () => {
     const app = createApp({
@@ -82,7 +93,41 @@ describe("AI MC API", () => {
     expect(openai.responses.create).not.toHaveBeenCalled();
   });
 
-  it("returns generated speech as mp3 audio", async () => {
+  it("uses Gemini 3.1 Flash TTS as the primary speech engine", async () => {
+    const fetchImpl = createMockGeminiFetch();
+    const app = createApp({
+      fetchImpl,
+      env: {
+        GEMINI_API_KEY: "gemini-test-key",
+        GEMINI_TTS_MODEL: "gemini-3.1-flash-tts-preview",
+        GEMINI_TTS_VOICE: "Leda"
+      }
+    });
+
+    const response = await request(app)
+      .post("/api/tts")
+      .send({ text: "안녕하세요. AI MC입니다.", geminiVoice: "Puck" })
+      .expect(200);
+
+    expect(response.headers["content-type"]).toContain("audio/wav");
+    expect(response.headers["x-ai-mc-tts-provider"]).toBe("gemini");
+    expect(response.body.length).toBe(48);
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "https://generativelanguage.googleapis.com/v1beta/interactions",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          "x-goog-api-key": "gemini-test-key"
+        })
+      })
+    );
+    const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(body.model).toBe("gemini-3.1-flash-tts-preview");
+    expect(body.generation_config.speech_config[0].voice).toBe("Puck");
+    expect(body.input).toContain("귀엽고 어린 AI 로봇");
+  });
+
+  it("falls back to OpenAI speech when Gemini key is not configured", async () => {
     const openai = createMockOpenAI();
     const app = createApp({
       openai,
@@ -100,6 +145,7 @@ describe("AI MC API", () => {
       .expect(200);
 
     expect(response.headers["content-type"]).toContain("audio/mpeg");
+    expect(response.headers["x-ai-mc-tts-provider"]).toBe("openai");
     expect(response.body.length).toBe(4);
     expect(openai.audio.speech.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -109,6 +155,37 @@ describe("AI MC API", () => {
         speed: 1.18
       })
     );
+  });
+
+  it("falls back to OpenAI speech when Gemini returns an error", async () => {
+    const openai = createMockOpenAI();
+    const fetchImpl = vi.fn(async () => ({
+      ok: false,
+      json: async () => ({
+        error: {
+          message: "Gemini quota exceeded"
+        }
+      })
+    }));
+    const app = createApp({
+      openai,
+      fetchImpl,
+      env: {
+        GEMINI_API_KEY: "gemini-test-key",
+        OPENAI_API_KEY: "test-key",
+        OPENAI_TTS_MODEL: "gpt-4o-mini-tts",
+        OPENAI_TTS_VOICE: "shimmer"
+      }
+    });
+
+    const response = await request(app)
+      .post("/api/tts")
+      .send({ text: "안녕하세요. AI MC입니다." })
+      .expect(200);
+
+    expect(response.headers["x-ai-mc-tts-provider"]).toBe("openai");
+    expect(fetchImpl).toHaveBeenCalled();
+    expect(openai.audio.speech.create).toHaveBeenCalled();
   });
 
   it("normalizes markdown copy before display or speech", () => {

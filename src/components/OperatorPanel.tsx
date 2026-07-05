@@ -2,6 +2,14 @@ import type { AudienceQuestion, RobotState } from "../types";
 import { canGenerateAnswer } from "../lib/mcFlow";
 import { StatusBadge } from "./StatusBadge";
 
+const geminiVoiceOptions = [
+  { value: "Leda", label: "Leda · 어리고 맑음" },
+  { value: "Puck", label: "Puck · 발랄함" },
+  { value: "Zephyr", label: "Zephyr · 밝음" },
+  { value: "Aoede", label: "Aoede · 산뜻함" },
+  { value: "Laomedeia", label: "Laomedeia · 업비트" }
+];
+
 interface OperatorPanelProps {
   questions: AudienceQuestion[];
   selectedQuestion: AudienceQuestion | null;
@@ -12,12 +20,14 @@ interface OperatorPanelProps {
   error: string;
   isGenerating: boolean;
   isSpeaking: boolean;
+  geminiVoice: string;
   onSelectQuestion: (question: AudienceQuestion) => void;
   onManualQuestionChange: (value: string) => void;
   onAddManualQuestion: () => void;
   onGenerateAnswer: () => void;
   onDraftAnswerChange: (value: string) => void;
   onApproveDraft: () => void;
+  onGeminiVoiceChange: (value: string) => void;
   onSpeak: () => void;
 }
 
@@ -31,12 +41,14 @@ export function OperatorPanel({
   error,
   isGenerating,
   isSpeaking,
+  geminiVoice,
   onSelectQuestion,
   onManualQuestionChange,
   onAddManualQuestion,
   onGenerateAnswer,
   onDraftAnswerChange,
   onApproveDraft,
+  onGeminiVoiceChange,
   onSpeak
 }: OperatorPanelProps) {
   const selectedText = selectedQuestion?.text || manualQuestion;
@@ -53,6 +65,31 @@ export function OperatorPanel({
         </div>
         <StatusBadge state={robotState} />
       </div>
+
+      <section className="control-section voice-section">
+        <div className="section-heading">
+          <h3>목소리</h3>
+          <span>Gemini 메인</span>
+        </div>
+        <div className="voice-engine-card">
+          <strong>Gemini 3.1 Flash TTS</strong>
+          <span>키가 없거나 실패하면 OpenAI TTS로 자동 폴백</span>
+        </div>
+        <label className="gemini-voice-select">
+          <span>Gemini 음색</span>
+          <select
+            value={geminiVoice}
+            onChange={(event) => onGeminiVoiceChange(event.target.value)}
+            aria-label="Gemini 음색"
+          >
+            {geminiVoiceOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </section>
 
       <section className="control-section">
         <div className="section-heading">
