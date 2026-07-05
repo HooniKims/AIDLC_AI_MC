@@ -72,12 +72,14 @@ button:disabled {
 .route-tabs a {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   min-height: 34px;
   padding: 0 14px;
   border-radius: 999px;
   color: #fff;
   text-decoration: none;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .route-tabs a:hover {
@@ -672,6 +674,14 @@ textarea:focus {
 
   .route-tabs {
     top: 10px;
+    width: calc(100vw - 32px);
+    max-width: 340px;
+  }
+
+  .route-tabs a {
+    flex: 1;
+    padding: 0 8px;
+    font-size: 14px;
   }
 
   .demo-grid,
@@ -713,6 +723,17 @@ textarea:focus {
   .manual-input-row,
   .action-row {
     grid-template-columns: 1fr;
+  }
+
+  .question-chip {
+    font-size: 15px;
+    line-height: 1.25;
+  }
+
+  .question-chip span {
+    display: block;
+    margin-bottom: 2px;
+    font-size: 11px;
   }
 }
 
