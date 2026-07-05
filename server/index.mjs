@@ -57,6 +57,10 @@ function hasGeminiApiKey(env) {
   return Boolean(envValue(env, "GEMINI_API_KEY", "").trim());
 }
 
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export function plainMcCopy(text) {
   return String(text || "")
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
@@ -79,6 +83,8 @@ function ttsSpeed(env) {
 }
 
 function geminiTtsPrompt(text) {
+  const speechText = geminiSpeechText(text);
+
   return [
     "[excited] [curious] [very fast]",
     "한국어로 말해 주세요.",
@@ -86,8 +92,14 @@ function geminiTtsPrompt(text) {
     "말투는 귀엽고 발랄하지만 실제 행사 진행자답게 발음은 또렷해야 합니다.",
     "낮고 진지한 아나운서 톤, 과장된 성인 내레이션 톤은 피하세요.",
     "",
-    text
+    speechText
   ].join("\n");
+}
+
+function geminiSpeechText(text) {
+  return plainMcCopy(text)
+    .replace(/\bAI\s*MC\b/g, "에이아이 엠씨")
+    .replace(/AI·디지털/g, "에이아이 디지털");
 }
 
 function geminiAudioData(payload) {
@@ -119,16 +131,22 @@ function extractGeminiStreamAudio(eventText) {
     return null;
   }
 
+  let payload;
   try {
-    const payload = JSON.parse(dataText);
-    const delta = payload?.delta;
-    const mimeType = delta?.mime_type || delta?.mimeType || "";
-
-    if (delta?.data && (String(mimeType).startsWith("audio/") || delta?.type === "audio")) {
-      return Buffer.from(delta.data, "base64");
-    }
+    payload = JSON.parse(dataText);
   } catch {
     return null;
+  }
+
+  if (payload?.error?.message) {
+    throw new Error(payload.error.message);
+  }
+
+  const delta = payload?.delta;
+  const mimeType = delta?.mime_type || delta?.mimeType || "";
+
+  if (delta?.data && (String(mimeType).startsWith("audio/") || delta?.type === "audio")) {
+    return Buffer.from(delta.data, "base64");
   }
 
   return null;
@@ -202,6 +220,28 @@ function wavFromPcm(pcm, sampleRate = 24000, channels = 1, bitsPerSample = 16) {
 }
 
 async function createGeminiSpeech({ env, fetchImpl, text, voice }) {
+  const response = await fetchGeminiSpeech({ env, fetchImpl, text, voice });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload?.error?.message || "Gemini TTS 호출에 실패했습니다.");
+  }
+
+  const contentType = response.headers?.get?.("content-type") || "";
+  if (contentType.includes("text/event-stream")) {
+    return wavFromPcm(await collectGeminiStreamAudio(response));
+  }
+
+  const payload = await response.json().catch(() => ({}));
+  const audioData = geminiAudioData(payload);
+  if (!audioData) {
+    throw new Error("Gemini TTS 응답에 오디오 데이터가 없습니다.");
+  }
+
+  return wavFromPcm(Buffer.from(audioData, "base64"));
+}
+
+async function fetchGeminiSpeech({ env, fetchImpl, text, voice }) {
   const response = await fetchImpl("https://generativelanguage.googleapis.com/v1beta/interactions", {
     method: "POST",
     headers: {
@@ -226,23 +266,34 @@ async function createGeminiSpeech({ env, fetchImpl, text, voice }) {
     })
   });
 
-  if (!response.ok) {
-    const payload = await response.json().catch(() => ({}));
-    throw new Error(payload?.error?.message || "Gemini TTS 호출에 실패했습니다.");
+  return response;
+}
+
+function isRetryableGeminiSpeechError(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return message.includes("too_many_requests") || message.includes("quota") || message.includes("rate");
+}
+
+async function createGeminiSpeechWithRetry({ env, fetchImpl, text, voice, retryDelayMs = 1200 }) {
+  const delays = [0, retryDelayMs, retryDelayMs * 2];
+  let lastError;
+
+  for (const delay of delays) {
+    if (delay > 0) {
+      await wait(delay);
+    }
+
+    try {
+      return await createGeminiSpeech({ env, fetchImpl, text, voice });
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableGeminiSpeechError(error)) {
+        throw error;
+      }
+    }
   }
 
-  const contentType = response.headers?.get?.("content-type") || "";
-  if (contentType.includes("text/event-stream")) {
-    return wavFromPcm(await collectGeminiStreamAudio(response));
-  }
-
-  const payload = await response.json().catch(() => ({}));
-  const audioData = geminiAudioData(payload);
-  if (!audioData) {
-    throw new Error("Gemini TTS 응답에 오디오 데이터가 없습니다.");
-  }
-
-  return wavFromPcm(Buffer.from(audioData, "base64"));
+  throw lastError;
 }
 
 function getOpenAIClient(openai, env) {
@@ -363,11 +414,12 @@ export function createApp(options = {}) {
 
       if (hasGeminiApiKey(env)) {
         try {
-          const buffer = await createGeminiSpeech({
+          const buffer = await createGeminiSpeechWithRetry({
             env,
             fetchImpl,
             text,
-            voice: geminiVoice
+            voice: geminiVoice,
+            retryDelayMs: options.retryDelayMs
           });
 
           response.setHeader("Content-Type", "audio/wav");

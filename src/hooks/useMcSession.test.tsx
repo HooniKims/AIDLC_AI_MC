@@ -31,7 +31,7 @@ describe("useMcSession speech preparation", () => {
     vi.unstubAllGlobals();
   });
 
-  it("prepares TTS for the draft answer and reuses it when speaking", async () => {
+  it("prepares TTS after approval and reuses it when speaking", async () => {
     const fetchMock = vi.fn(async () => {
       return new Response(new Blob(["audio"], { type: "audio/wav" }), {
         status: 200,
@@ -53,6 +53,16 @@ describe("useMcSession speech preparation", () => {
       await vi.advanceTimersByTimeAsync(500);
     });
 
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    act(() => {
+      result.current.approveDraft();
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/tts",
@@ -65,10 +75,6 @@ describe("useMcSession speech preparation", () => {
     const requestBody = JSON.parse(String(preparedCall[1].body));
     expect(requestBody.requireProvider).toBe("gemini");
 
-    act(() => {
-      result.current.approveDraft();
-    });
-
     await act(async () => {
       await result.current.speak();
     });
@@ -77,78 +83,59 @@ describe("useMcSession speech preparation", () => {
     expect(MockAudio.instances[0]?.src).toBe("blob:prepared-speech");
   });
 
-  it("prepares multi-sentence TTS chunks in parallel", async () => {
-    const pendingResponses: Array<(response: Response) => void> = [];
-    const fetchMock = vi.fn(
-      () =>
-        new Promise<Response>((resolve) => {
-          pendingResponses.push(resolve);
-        })
-    );
-    vi.stubGlobal("fetch", fetchMock);
-
-    const { result } = renderHook(() => useMcSession());
-
-    act(() => {
-      result.current.setDraftAnswer("첫 문장입니다. 두 번째 문장입니다.");
-    });
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(500);
-    });
-
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    const firstCall = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
-    const secondCall = fetchMock.mock.calls[1] as unknown as [string, RequestInit];
-    expect(JSON.parse(String(firstCall[1].body)).text).toBe("첫 문장입니다.");
-    expect(JSON.parse(String(secondCall[1].body)).text).toBe("두 번째 문장입니다.");
-    expect(JSON.parse(String(firstCall[1].body)).requireProvider).toBe("gemini");
-    expect(JSON.parse(String(secondCall[1].body)).requireProvider).toBe("gemini");
-
-    await act(async () => {
-      pendingResponses.forEach((resolve) => {
-        resolve(
-          new Response(new Blob(["audio"], { type: "audio/wav" }), {
-            status: 200,
-            headers: {
-              "Content-Type": "audio/wav",
-              "X-AI-MC-TTS-Provider": "gemini"
-            }
-          })
-        );
-      });
-    });
-  });
-
-  it("does not prepare mixed Gemini and OpenAI chunks", async () => {
-    const geminiResponse = () =>
-      new Response(new Blob(["gemini"], { type: "audio/wav" }), {
+  it("prepares a full answer in one Gemini request to keep the voice stable", async () => {
+    const fetchMock = vi.fn(async () => {
+      return new Response(new Blob(["audio"], { type: "audio/wav" }), {
         status: 200,
         headers: {
           "Content-Type": "audio/wav",
           "X-AI-MC-TTS-Provider": "gemini"
         }
       });
-    const openaiResponse = () =>
-      new Response(new Blob(["openai"], { type: "audio/mpeg" }), {
-        status: 200,
-        headers: {
-          "Content-Type": "audio/mpeg",
-          "X-AI-MC-TTS-Provider": "openai"
-        }
-      });
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(geminiResponse())
-      .mockResolvedValueOnce(openaiResponse())
-      .mockResolvedValueOnce(geminiResponse())
-      .mockResolvedValueOnce(openaiResponse());
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     const { result } = renderHook(() => useMcSession());
 
     act(() => {
       result.current.setDraftAnswer("첫 문장입니다. 두 번째 문장입니다.");
+    });
+
+    act(() => {
+      result.current.approveDraft();
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const firstCall = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(firstCall[1].body)).text).toBe("첫 문장입니다. 두 번째 문장입니다.");
+    expect(JSON.parse(String(firstCall[1].body)).requireProvider).toBe("gemini");
+  });
+
+  it("does not play audio when the Gemini-required request fails", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(async () =>
+        new Response(JSON.stringify({ error: "Gemini 음성 생성에 실패했습니다. quota" }), {
+          status: 502,
+          headers: {
+            "Content-Type": "application/json"
+          }
+        })
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { result } = renderHook(() => useMcSession());
+
+    act(() => {
+      result.current.setDraftAnswer("첫 문장입니다. 두 번째 문장입니다.");
+    });
+
+    act(() => {
+      result.current.approveDraft();
     });
 
     await act(async () => {
@@ -159,15 +146,11 @@ describe("useMcSession speech preparation", () => {
       await Promise.resolve();
     });
 
-    act(() => {
-      result.current.approveDraft();
-    });
-
     await act(async () => {
       await result.current.speak();
     });
 
     expect(MockAudio.instances).toHaveLength(0);
-    expect(result.current.error).toContain("Gemini 음성만");
+    expect(result.current.error).toContain("Gemini 음성 생성에 실패했습니다");
   });
 });

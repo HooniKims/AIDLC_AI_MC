@@ -171,6 +171,125 @@ describe("AI MC API", () => {
     );
   });
 
+  it("rewrites blocked-looking stage terms before sending text to Gemini TTS", async () => {
+    const fetchImpl = createMockGeminiFetch();
+    const app = createApp({
+      fetchImpl,
+      env: {
+        OPENAI_API_KEY: "",
+        GEMINI_API_KEY: "gemini-test-key",
+        GEMINI_TTS_MODEL: "gemini-3.1-flash-tts-preview",
+        GEMINI_TTS_VOICE: "Leda"
+      }
+    });
+
+    await request(app)
+      .post("/api/tts")
+      .send({ text: "저는 디지털 러닝 콘페스타의 AI MC입니다.", geminiVoice: "Leda", requireProvider: "gemini" })
+      .expect(200);
+
+    const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(body.input).toContain("에이아이 엠씨");
+    expect(body.input).not.toContain("AI MC입니다");
+  });
+
+  it("surfaces Gemini stream errors instead of reporting missing audio", async () => {
+    const fetchImpl = vi.fn(async () => new Response(
+      [
+        "event: error",
+        `data: ${JSON.stringify({
+          error: {
+            message: "You do not have enough quota to make this request.",
+            code: "too_many_requests"
+          },
+          event_type: "error"
+        })}`,
+        ""
+      ].join("\n"),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "text/event-stream"
+        }
+      }
+    ));
+    const app = createApp({
+      fetchImpl,
+      retryDelayMs: 1,
+      env: {
+        OPENAI_API_KEY: "test-key",
+        GEMINI_API_KEY: "gemini-test-key"
+      }
+    });
+
+    const response = await request(app)
+      .post("/api/tts")
+      .send({ text: "안녕하세요.", geminiVoice: "Leda", requireProvider: "gemini" })
+      .expect(502);
+
+    expect(response.body.error).toContain("quota");
+  });
+
+  it("retries Gemini TTS rate limits before failing", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(
+        [
+          "event: error",
+          `data: ${JSON.stringify({
+            error: {
+              message: "You do not have enough quota to make this request.",
+              code: "too_many_requests"
+            },
+            event_type: "error"
+          })}`,
+          ""
+        ].join("\n"),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "text/event-stream"
+          }
+        }
+      ))
+      .mockResolvedValueOnce(new Response(
+        [
+          "event: step.delta",
+          `data: ${JSON.stringify({
+            index: 0,
+            delta: {
+              mime_type: "audio/l16",
+              data: Buffer.from([1, 2, 3, 4]).toString("base64")
+            },
+            event_type: "step.delta"
+          })}`,
+          ""
+        ].join("\n"),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "text/event-stream"
+          }
+        }
+      ));
+    const app = createApp({
+      fetchImpl,
+      retryDelayMs: 1,
+      env: {
+        OPENAI_API_KEY: "test-key",
+        GEMINI_API_KEY: "gemini-test-key"
+      }
+    });
+
+    const response = await request(app)
+      .post("/api/tts")
+      .send({ text: "안녕하세요.", geminiVoice: "Leda", requireProvider: "gemini" })
+      .expect(200);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(response.headers["x-ai-mc-tts-provider"]).toBe("gemini");
+  });
+
   it("reads streamed Gemini audio deltas", async () => {
     const fetchImpl = createMockGeminiStreamFetch();
     const app = createApp({

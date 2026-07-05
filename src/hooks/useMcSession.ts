@@ -19,23 +19,6 @@ function speechCacheKey(text: string, voice: string) {
   return `${voice.trim() || "default"}::${plainMcCopy(text)}`;
 }
 
-function speechSegmentsForKorean(text: string): string[] {
-  const cleanText = plainMcCopy(text).replace(/\s+/g, " ").trim();
-  if (!cleanText) {
-    return [];
-  }
-
-  const sentences = cleanText.match(/[^.!?。！？]+[.!?。！？]?/g)?.map((sentence) => sentence.trim()).filter(Boolean) || [
-    cleanText
-  ];
-
-  if (sentences.length <= 3) {
-    return sentences;
-  }
-
-  return [sentences[0], sentences[1], sentences.slice(2).join(" ")];
-}
-
 function readStoredValue(key: string, fallback: string) {
   if (typeof window === "undefined" || !window.localStorage) {
     return fallback;
@@ -75,6 +58,7 @@ export function useMcSession() {
   const [isPreparingSpeech, setIsPreparingSpeech] = useState(false);
   const [speechProvider, setSpeechProvider] = useState("");
   const [preparedSpeechKey, setPreparedSpeechKey] = useState("");
+  const [speechPreparationVersion, setSpeechPreparationVersion] = useState(0);
   const speechAssetRef = useRef<SpeechAsset | null>(null);
   const speechRequestRef = useRef<{ key: string; promise: Promise<SpeechAsset> } | null>(null);
 
@@ -121,7 +105,7 @@ export function useMcSession() {
       return speechRequestRef.current.promise;
     }
 
-    const segments = speechSegmentsForKorean(cleanText);
+    const segments = [cleanText];
     const promise = Promise.all(
       segments.map(async (segment) => {
         const response = await fetch("/api/tts", {
@@ -176,7 +160,12 @@ export function useMcSession() {
   }
 
   useEffect(() => {
-    const text = plainMcCopy(draftAnswer);
+    if (speechPreparationVersion === 0) {
+      setIsPreparingSpeech(false);
+      return;
+    }
+
+    const text = plainMcCopy(approvedAnswer);
     if (!text) {
       setIsPreparingSpeech(false);
       return;
@@ -208,7 +197,7 @@ export function useMcSession() {
       window.clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [draftAnswer, geminiVoice]);
+  }, [approvedAnswer, geminiVoice, speechPreparationVersion]);
 
   useEffect(() => {
     return () => {
@@ -287,6 +276,7 @@ export function useMcSession() {
     }
 
     setApprovedAnswer(answer);
+    setSpeechPreparationVersion((version) => version + 1);
     setError("");
   }
 
