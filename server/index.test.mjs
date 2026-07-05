@@ -128,14 +128,13 @@ describe("AI MC API", () => {
     expect(openai.responses.create).not.toHaveBeenCalled();
   });
 
-  it("uses Gemini 3.1 Flash TTS as the primary speech engine", async () => {
+  it("uses Gemini 2.5 Flash TTS as the primary speech engine by default", async () => {
     const fetchImpl = createMockGeminiFetch();
     const app = createApp({
       fetchImpl,
       env: {
         OPENAI_API_KEY: "",
         GEMINI_API_KEY: "gemini-test-key",
-        GEMINI_TTS_MODEL: "gemini-3.1-flash-tts-preview",
         GEMINI_TTS_VOICE: "Leda"
       }
     });
@@ -159,11 +158,35 @@ describe("AI MC API", () => {
       })
     );
     const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
-    expect(body.model).toBe("gemini-3.1-flash-tts-preview");
-    expect(body.stream).toBe(true);
+    expect(body.model).toBe("gemini-2.5-flash-preview-tts");
+    expect(body.stream).toBeUndefined();
     expect(body.generation_config.speech_config[0].voice).toBe("Puck");
     expect(body.input).toContain("어린 캐릭터");
     expect(body.input).toContain("[very fast]");
+    expect(fetchImpl.mock.calls[0][1].headers).not.toHaveProperty("Api-Revision");
+  });
+
+  it("keeps Gemini 3.1 streaming TTS available when configured", async () => {
+    const fetchImpl = createMockGeminiStreamFetch();
+    const app = createApp({
+      fetchImpl,
+      env: {
+        OPENAI_API_KEY: "",
+        GEMINI_API_KEY: "gemini-test-key",
+        GEMINI_TTS_MODEL: "gemini-3.1-flash-tts-preview",
+        GEMINI_TTS_VOICE: "Leda"
+      }
+    });
+
+    const response = await request(app)
+      .post("/api/tts")
+      .send({ text: "안녕하세요. AI MC입니다.", geminiVoice: "Leda" })
+      .expect(200);
+
+    const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(response.headers["x-ai-mc-tts-provider"]).toBe("gemini");
+    expect(body.model).toBe("gemini-3.1-flash-tts-preview");
+    expect(body.stream).toBe(true);
     expect(fetchImpl.mock.calls[0][1].headers).toEqual(
       expect.objectContaining({
         "Api-Revision": "2026-05-20"
@@ -218,7 +241,8 @@ describe("AI MC API", () => {
       retryDelayMs: 1,
       env: {
         OPENAI_API_KEY: "test-key",
-        GEMINI_API_KEY: "gemini-test-key"
+        GEMINI_API_KEY: "gemini-test-key",
+        GEMINI_TTS_MODEL: "gemini-3.1-flash-tts-preview"
       }
     });
 
@@ -277,7 +301,8 @@ describe("AI MC API", () => {
       retryDelayMs: 1,
       env: {
         OPENAI_API_KEY: "test-key",
-        GEMINI_API_KEY: "gemini-test-key"
+        GEMINI_API_KEY: "gemini-test-key",
+        GEMINI_TTS_MODEL: "gemini-3.1-flash-tts-preview"
       }
     });
 
@@ -333,7 +358,6 @@ describe("AI MC API", () => {
       env: {
         OPENAI_API_KEY: "",
         GEMINI_API_KEY: "gemini-test-key",
-        GEMINI_TTS_MODEL: "gemini-3.1-flash-tts-preview",
         GEMINI_TTS_VOICE: "Leda"
       }
     });
@@ -345,6 +369,20 @@ describe("AI MC API", () => {
 
     expect(response.headers["x-ai-mc-tts-provider"]).toBe("gemini");
     expect(response.body.length).toBe(48);
+  });
+
+  it("reports Gemini 2.5 Flash TTS as the default health model", async () => {
+    const app = createApp({
+      env: {
+        OPENAI_API_KEY: "",
+        GEMINI_API_KEY: "gemini-test-key"
+      }
+    });
+
+    const response = await request(app).get("/api/health").expect(200);
+
+    expect(response.body.geminiTtsModel).toBe("gemini-2.5-flash-preview-tts");
+    expect(response.body.geminiTtsStreaming).toBe(false);
   });
 
   it("falls back to OpenAI speech when Gemini key is not configured", async () => {

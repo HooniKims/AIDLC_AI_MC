@@ -86,7 +86,7 @@ export function OperatorPanel({
           <span>Gemini 메인</span>
         </div>
         <div className="voice-engine-card">
-          <strong>Gemini 3.1 Flash TTS</strong>
+          <strong>Gemini 2.5 Flash TTS</strong>
           <span>한 답변 안에서는 Gemini 음색으로 끝까지 고정</span>
         </div>
         <label className="gemini-voice-select">

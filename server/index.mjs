@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const defaultRootDir = path.resolve(__dirname, "..");
+const defaultGeminiTtsModel = "gemini-2.5-flash-preview-tts";
+const geminiStreamingApiRevision = "2026-05-20";
 
 dotenv.config();
 
@@ -37,7 +39,19 @@ function envValue(env, key, fallback) {
     return env[key] ?? fallback;
   }
 
+  if (env && env !== process.env) {
+    return fallback;
+  }
+
   return process.env[key] || fallback;
+}
+
+function geminiTtsModel(env) {
+  return envValue(env, "GEMINI_TTS_MODEL", defaultGeminiTtsModel);
+}
+
+function supportsGeminiTtsStreaming(model) {
+  return /gemini-3\.1/i.test(String(model || ""));
 }
 
 function refreshRuntimeEnv(env, rootDir) {
@@ -242,28 +256,36 @@ async function createGeminiSpeech({ env, fetchImpl, text, voice }) {
 }
 
 async function fetchGeminiSpeech({ env, fetchImpl, text, voice }) {
+  const model = geminiTtsModel(env);
+  const shouldStream = supportsGeminiTtsStreaming(model);
+  const headers = {
+    "x-goog-api-key": envValue(env, "GEMINI_API_KEY", ""),
+    "Content-Type": "application/json"
+  };
+  const body = {
+    model,
+    input: geminiTtsPrompt(text),
+    response_format: {
+      type: "audio"
+    },
+    generation_config: {
+      speech_config: [
+        {
+          voice: voice || envValue(env, "GEMINI_TTS_VOICE", "Leda")
+        }
+      ]
+    }
+  };
+
+  if (shouldStream) {
+    headers["Api-Revision"] = geminiStreamingApiRevision;
+    body.stream = true;
+  }
+
   const response = await fetchImpl("https://generativelanguage.googleapis.com/v1beta/interactions", {
     method: "POST",
-    headers: {
-      "x-goog-api-key": envValue(env, "GEMINI_API_KEY", ""),
-      "Content-Type": "application/json",
-      "Api-Revision": "2026-05-20"
-    },
-    body: JSON.stringify({
-      model: envValue(env, "GEMINI_TTS_MODEL", "gemini-3.1-flash-tts-preview"),
-      input: geminiTtsPrompt(text),
-      response_format: {
-        type: "audio"
-      },
-      generation_config: {
-        speech_config: [
-          {
-            voice: voice || envValue(env, "GEMINI_TTS_VOICE", "Leda")
-          }
-        ]
-      },
-      stream: true
-    })
+    headers,
+    body: JSON.stringify(body)
   });
 
   return response;
@@ -331,6 +353,7 @@ export function createApp(options = {}) {
 
   app.get("/api/health", (_request, response) => {
     refreshRuntimeEnv(env, rootDir);
+    const activeGeminiTtsModel = geminiTtsModel(env);
     response.json({
       ok: true,
       model: envValue(env, "OPENAI_MODEL", "gpt-5.4-mini"),
@@ -338,7 +361,8 @@ export function createApp(options = {}) {
       ttsVoice: envValue(env, "OPENAI_TTS_VOICE", "shimmer"),
       ttsSpeed: ttsSpeed(env),
       primaryTtsProvider: hasGeminiApiKey(env) ? "gemini" : "openai",
-      geminiTtsModel: envValue(env, "GEMINI_TTS_MODEL", "gemini-3.1-flash-tts-preview"),
+      geminiTtsModel: activeGeminiTtsModel,
+      geminiTtsStreaming: supportsGeminiTtsStreaming(activeGeminiTtsModel),
       geminiTtsVoice: envValue(env, "GEMINI_TTS_VOICE", "Leda"),
       hasGeminiApiKey: hasGeminiApiKey(env),
       hasApiKey: hasApiKey(env)
