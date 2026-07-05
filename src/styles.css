@@ -206,6 +206,7 @@ button:disabled {
   inset: 0;
   z-index: -1;
   overflow: hidden;
+  opacity: 0.72;
 }
 
 .confesta-backdrop::before {
@@ -222,8 +223,8 @@ button:disabled {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(90deg, rgba(20, 10, 41, 0.46), rgba(20, 10, 41, 0.06) 50%, transparent 74%),
-    linear-gradient(180deg, transparent 38%, rgba(20, 10, 41, 0.62) 100%);
+    linear-gradient(90deg, rgba(20, 10, 41, 0.22), rgba(20, 10, 41, 0.03) 50%, transparent 74%),
+    linear-gradient(180deg, transparent 48%, rgba(20, 10, 41, 0.28) 100%);
   pointer-events: none;
 }
 
@@ -251,7 +252,7 @@ button:disabled {
 .confesta-backdrop__sparkle {
   position: absolute;
   width: clamp(90px, 13vw, 210px);
-  opacity: 0.58;
+  opacity: 0.48;
 }
 
 .sparkle-a {
@@ -467,29 +468,39 @@ button:disabled {
   width: fit-content;
   max-width: min(920px, 100%);
   font-weight: 900;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  text-wrap: balance;
 }
 
 .stage-question {
   padding: 10px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 999px;
-  background: rgba(20, 10, 41, 0.82);
+  background: rgba(20, 10, 41, 0.56);
   color: #fff;
   font-size: clamp(1rem, 1.4vw, 1.35rem);
   line-height: 1.25;
-  box-shadow: 0 10px 22px rgba(20, 10, 41, 0.26);
-  backdrop-filter: blur(10px);
+  box-shadow: 0 6px 16px rgba(20, 10, 41, 0.14);
+  backdrop-filter: blur(8px);
 }
 
 .stage-answer {
+  display: grid;
+  gap: 0.16em;
   padding: clamp(18px, 2vw, 28px) clamp(22px, 2.4vw, 34px);
-  border: 2px solid rgba(20, 10, 41, 0.12);
+  border: 2px solid rgba(20, 10, 41, 0.06);
   border-radius: 26px 26px 26px 10px;
-  background: var(--confesta-lime-ribbon);
+  background: rgba(200, 255, 61, 0.76);
   color: var(--confesta-ink);
   font-size: clamp(1.35rem, 2.15vw, 2.45rem);
   line-height: 1.24;
-  box-shadow: 0 14px 0 rgba(42, 0, 80, 0.36);
+  box-shadow: 0 6px 0 rgba(42, 0, 80, 0.16), 0 14px 28px rgba(20, 10, 41, 0.12);
+  backdrop-filter: blur(4px);
+}
+
+.stage-answer span {
+  display: block;
 }
 
 .demo-stage-card .stage-topline {
@@ -705,6 +716,17 @@ textarea:focus {
   color: var(--confesta-muted);
   font-size: 0.92rem;
   font-weight: 800;
+}
+
+.voice-status {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(20, 10, 41, 0.08);
+  color: var(--confesta-ink);
+  font-size: 0.95rem;
+  font-weight: 900;
+  line-height: 1.3;
 }
 
 .operator-panel .question-chip {

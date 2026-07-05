@@ -3,10 +3,10 @@ import { canGenerateAnswer } from "../lib/mcFlow";
 import { StatusBadge } from "./StatusBadge";
 
 const geminiVoiceOptions = [
-  { value: "Leda", label: "Leda · 어리고 맑음" },
+  { value: "Leda", label: "Leda · 아이 같은 맑은 톤" },
   { value: "Puck", label: "Puck · 발랄함" },
   { value: "Zephyr", label: "Zephyr · 밝음" },
-  { value: "Aoede", label: "Aoede · 산뜻함" },
+  { value: "Achird", label: "Achird · 친근함" },
   { value: "Laomedeia", label: "Laomedeia · 업비트" }
 ];
 
@@ -20,7 +20,10 @@ interface OperatorPanelProps {
   error: string;
   isGenerating: boolean;
   isSpeaking: boolean;
+  isPreparingSpeech: boolean;
+  isSpeechReady: boolean;
   geminiVoice: string;
+  speechProvider: string;
   onSelectQuestion: (question: AudienceQuestion) => void;
   onManualQuestionChange: (value: string) => void;
   onAddManualQuestion: () => void;
@@ -41,7 +44,10 @@ export function OperatorPanel({
   error,
   isGenerating,
   isSpeaking,
+  isPreparingSpeech,
+  isSpeechReady,
   geminiVoice,
+  speechProvider,
   onSelectQuestion,
   onManualQuestionChange,
   onAddManualQuestion,
@@ -55,6 +61,14 @@ export function OperatorPanel({
   const canGenerate = canGenerateAnswer(selectedText) && !isGenerating;
   const canApprove = draftAnswer.trim().length > 0;
   const canSpeak = approvedAnswer.trim().length > 0 && !isSpeaking;
+  const speechStatus =
+    isSpeechReady && speechProvider === "gemini"
+      ? "Gemini 음색 준비 완료"
+      : isSpeechReady && speechProvider === "openai"
+        ? "OpenAI 폴백 음성 준비 완료"
+        : isPreparingSpeech
+          ? "선택한 음색으로 미리 생성 중"
+          : "답변을 만들면 자동으로 미리 준비";
 
   return (
     <aside className="operator-panel" aria-label="운영자 콘솔">
@@ -89,6 +103,9 @@ export function OperatorPanel({
             ))}
           </select>
         </label>
+        <p className="voice-status" aria-live="polite">
+          {speechStatus}
+        </p>
       </section>
 
       <section className="control-section">
@@ -156,7 +173,7 @@ export function OperatorPanel({
             승인
           </button>
           <button className="primary-action" type="button" onClick={onSpeak} disabled={!canSpeak}>
-            {isSpeaking ? "말하는 중" : "로봇 말하기"}
+            {isSpeaking ? "말하는 중" : isPreparingSpeech ? "준비 중 · 말하기" : "로봇 말하기"}
           </button>
         </div>
       </section>

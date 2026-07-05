@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canGenerateAnswer, nextLipFrame, plainMcCopy, statusLabel } from "./mcFlow";
+import { canGenerateAnswer, nextLipFrame, plainMcCopy, stageLinesForKorean, statusLabel } from "./mcFlow";
 
 describe("mcFlow", () => {
   it("allows answer generation only for non-empty questions", () => {
@@ -23,5 +23,18 @@ describe("mcFlow", () => {
     expect(plainMcCopy("## 안내\n- **행사는** [공식 사이트](https://adl-confesta.kr/)에서 확인해요.")).toBe(
       "안내\n행사는 공식 사이트에서 확인해요."
     );
+  });
+
+  it("formats Korean stage copy into sentence-friendly display lines", () => {
+    expect(stageLinesForKorean("안녕하세요. 저는 AI MC입니다. 함께 시작해요!")).toEqual([
+      "안녕하세요.",
+      "저는 AI\u00a0MC입니다.",
+      "함께 시작해요!"
+    ]);
+    expect(stageLinesForKorean("교사가 가장 먼저 둘러보면 좋은 프로그램은 무엇인가요?", 14)).toEqual([
+      "교사가 가장 먼저 둘러보면",
+      "좋은 프로그램은",
+      "무엇인가요?"
+    ]);
   });
 });

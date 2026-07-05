@@ -28,8 +28,10 @@ function createMockGeminiFetch() {
   return vi.fn(async () => ({
     ok: true,
     json: async () => ({
-      output_audio: {
-        data: Buffer.from([1, 2, 3, 4]).toString("base64")
+      interaction: {
+        output_audio: {
+          data: Buffer.from([1, 2, 3, 4]).toString("base64")
+        }
       }
     })
   }));
@@ -113,6 +115,7 @@ describe("AI MC API", () => {
 
     expect(response.headers["content-type"]).toContain("audio/wav");
     expect(response.headers["x-ai-mc-tts-provider"]).toBe("gemini");
+    expect(response.headers["x-ai-mc-tts-voice"]).toBe("Puck");
     expect(response.body.length).toBe(48);
     expect(fetchImpl).toHaveBeenCalledWith(
       "https://generativelanguage.googleapis.com/v1beta/interactions",
@@ -126,7 +129,43 @@ describe("AI MC API", () => {
     const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
     expect(body.model).toBe("gemini-3.1-flash-tts-preview");
     expect(body.generation_config.speech_config[0].voice).toBe("Puck");
-    expect(body.input).toContain("귀엽고 어린 AI 로봇");
+    expect(body.input).toContain("어린 캐릭터");
+    expect(body.input).toContain("[very fast]");
+  });
+
+  it("reads Gemini REST audio from interaction steps", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        steps: [
+          {
+            content: [
+              {
+                mime_type: "audio/l16",
+                data: Buffer.from([5, 6, 7, 8]).toString("base64")
+              }
+            ]
+          }
+        ]
+      })
+    }));
+    const app = createApp({
+      fetchImpl,
+      env: {
+        OPENAI_API_KEY: "",
+        GEMINI_API_KEY: "gemini-test-key",
+        GEMINI_TTS_MODEL: "gemini-3.1-flash-tts-preview",
+        GEMINI_TTS_VOICE: "Leda"
+      }
+    });
+
+    const response = await request(app)
+      .post("/api/tts")
+      .send({ text: "안녕하세요. AI MC입니다.", geminiVoice: "Leda" })
+      .expect(200);
+
+    expect(response.headers["x-ai-mc-tts-provider"]).toBe("gemini");
+    expect(response.body.length).toBe(48);
   });
 
   it("falls back to OpenAI speech when Gemini key is not configured", async () => {
@@ -149,6 +188,7 @@ describe("AI MC API", () => {
 
     expect(response.headers["content-type"]).toContain("audio/mpeg");
     expect(response.headers["x-ai-mc-tts-provider"]).toBe("openai");
+    expect(response.headers["x-ai-mc-tts-voice"]).toBe("shimmer");
     expect(response.body.length).toBe(4);
     expect(openai.audio.speech.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -187,6 +227,7 @@ describe("AI MC API", () => {
       .expect(200);
 
     expect(response.headers["x-ai-mc-tts-provider"]).toBe("openai");
+    expect(response.headers["x-ai-mc-tts-fallback"]).toBe("gemini-error");
     expect(fetchImpl).toHaveBeenCalled();
     expect(openai.audio.speech.create).toHaveBeenCalled();
   });

@@ -31,6 +31,50 @@ export function plainMcCopy(text: string): string {
     .trim();
 }
 
+function splitLongKoreanSentence(sentence: string, maxChars: number): string[] {
+  const words = sentence.split(" ");
+  const lines: string[] = [];
+  let line = "";
+
+  for (const word of words) {
+    const nextLine = line ? `${line} ${word}` : word;
+    if (line && nextLine.length > maxChars) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = nextLine;
+    }
+  }
+
+  if (line) {
+    lines.push(line);
+  }
+
+  return lines;
+}
+
+function protectKoreanStagePhrases(text: string): string {
+  return text
+    .replace(/AI MC/g, "AI\u00a0MC")
+    .replace(/디지털 러닝/g, "디지털\u00a0러닝")
+    .replace(/AI·디지털/g, "AI·디지털");
+}
+
+export function stageLinesForKorean(text: string, maxChars = 26): string[] {
+  const normalized = protectKoreanStagePhrases(plainMcCopy(text).replace(/\s+/g, " ").trim());
+  if (!normalized) {
+    return [];
+  }
+
+  const sentenceMatches = normalized.match(/[^.!?。！？]+[.!?。！？]?/g) || [normalized];
+  return sentenceMatches
+    .map((sentence) => sentence.trim())
+    .filter(Boolean)
+    .flatMap((sentence) =>
+      sentence.length > maxChars ? splitLongKoreanSentence(sentence, maxChars) : [sentence]
+    );
+}
+
 export function statusLabel(state: RobotState): string {
   return STATUS_LABELS[state];
 }

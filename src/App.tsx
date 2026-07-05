@@ -43,7 +43,10 @@ function DemoScreen() {
           error={session.error}
           isGenerating={session.isGenerating}
           isSpeaking={session.isSpeaking}
+          isPreparingSpeech={session.isPreparingSpeech}
+          isSpeechReady={session.isSpeechReady}
           geminiVoice={session.geminiVoice}
+          speechProvider={session.speechProvider}
           onSelectQuestion={session.selectQuestion}
           onManualQuestionChange={session.setManualQuestion}
           onAddManualQuestion={session.addManualQuestion}
@@ -98,7 +101,10 @@ function OperatorScreen() {
           error={session.error}
           isGenerating={session.isGenerating}
           isSpeaking={session.isSpeaking}
+          isPreparingSpeech={session.isPreparingSpeech}
+          isSpeechReady={session.isSpeechReady}
           geminiVoice={session.geminiVoice}
+          speechProvider={session.speechProvider}
           onSelectQuestion={session.selectQuestion}
           onManualQuestionChange={session.setManualQuestion}
           onAddManualQuestion={session.addManualQuestion}

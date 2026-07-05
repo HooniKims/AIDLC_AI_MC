@@ -70,9 +70,9 @@ export function plainMcCopy(text) {
 }
 
 function ttsSpeed(env) {
-  const speed = Number(envValue(env, "OPENAI_TTS_SPEED", "1.18"));
+  const speed = Number(envValue(env, "OPENAI_TTS_SPEED", "1.28"));
   if (!Number.isFinite(speed)) {
-    return 1.18;
+    return 1.28;
   }
 
   return Math.min(4, Math.max(0.25, speed));
@@ -80,14 +80,31 @@ function ttsSpeed(env) {
 
 function geminiTtsPrompt(text) {
   return [
-    "[excited, youthful, bright, very fast]",
+    "[excited] [curious] [very fast]",
     "한국어로 말해 주세요.",
-    "귀엽고 어린 AI 로봇 마스코트 느낌으로, 맑고 높은 톤과 짧은 호흡으로 말해 주세요.",
-    "말투는 사랑스럽고 발랄하지만, 실제 행사 진행자답게 발음은 또렷해야 합니다.",
+    "어린 캐릭터 AI 로봇 진행자처럼, 맑고 높은 톤과 짧은 호흡으로 말해 주세요.",
+    "말투는 귀엽고 발랄하지만 실제 행사 진행자답게 발음은 또렷해야 합니다.",
     "낮고 진지한 아나운서 톤, 과장된 성인 내레이션 톤은 피하세요.",
     "",
     text
   ].join("\n");
+}
+
+function geminiAudioData(payload) {
+  const stepAudio = payload?.steps
+    ?.flatMap((step) => step?.content || step?.contents || [])
+    ?.find((part) => {
+      const mimeType = part?.mime_type || part?.mimeType || "";
+      return part?.data && String(mimeType).startsWith("audio/");
+    })?.data;
+
+  return (
+    payload?.interaction?.output_audio?.data ||
+    payload?.interaction?.outputAudio?.data ||
+    payload?.output_audio?.data ||
+    payload?.outputAudio?.data ||
+    stepAudio
+  );
 }
 
 function wavFromPcm(pcm, sampleRate = 24000, channels = 1, bitsPerSample = 16) {
@@ -140,7 +157,7 @@ async function createGeminiSpeech({ env, fetchImpl, text, voice }) {
     throw new Error(payload?.error?.message || "Gemini TTS 호출에 실패했습니다.");
   }
 
-  const audioData = payload?.output_audio?.data || payload?.outputAudio?.data;
+  const audioData = geminiAudioData(payload);
   if (!audioData) {
     throw new Error("Gemini TTS 응답에 오디오 데이터가 없습니다.");
   }
@@ -254,6 +271,7 @@ export function createApp(options = {}) {
 
     try {
       const geminiVoice = String(request.body?.geminiVoice || "").trim() || envValue(env, "GEMINI_TTS_VOICE", "Leda");
+      let geminiFallback = false;
 
       if (hasGeminiApiKey(env)) {
         try {
@@ -266,12 +284,14 @@ export function createApp(options = {}) {
 
           response.setHeader("Content-Type", "audio/wav");
           response.setHeader("X-AI-MC-TTS-Provider", "gemini");
+          response.setHeader("X-AI-MC-TTS-Voice", geminiVoice);
           response.send(buffer);
           return;
         } catch (geminiError) {
           if (!hasApiKey(env)) {
             throw geminiError;
           }
+          geminiFallback = true;
         }
       }
 
@@ -283,18 +303,23 @@ export function createApp(options = {}) {
       }
 
       const client = getOpenAIClient(options.openai, env);
+      const openaiVoice = envValue(env, "OPENAI_TTS_VOICE", "shimmer");
       const audio = await client.audio.speech.create({
         model: envValue(env, "OPENAI_TTS_MODEL", "gpt-4o-mini-tts"),
-        voice: envValue(env, "OPENAI_TTS_VOICE", "shimmer"),
+        voice: openaiVoice,
         input: text,
         instructions:
-          "한국어로 말해 주세요. 귀여운 AI 로봇 마스코트처럼 밝고 높은 톤, 짧은 호흡, 살짝 빠른 템포로 말하되 발음은 또렷하게 유지해 주세요. 낮고 진지한 아나운서 톤은 피하고, 어린 캐릭터처럼 사랑스럽지만 행사 진행자로서 과장되지 않게 말해 주세요.",
+          "한국어로 말해 주세요. 어린 캐릭터 AI 로봇 진행자처럼 밝고 높은 톤, 짧은 호흡, 빠른 템포로 말하되 발음은 또렷하게 유지해 주세요. 낮고 진지한 아나운서 톤은 피하고, 귀엽고 사랑스럽지만 행사 진행자로서 과장되지 않게 말해 주세요.",
         speed: ttsSpeed(env)
       });
       const buffer = Buffer.from(await audio.arrayBuffer());
 
       response.setHeader("Content-Type", "audio/mpeg");
       response.setHeader("X-AI-MC-TTS-Provider", "openai");
+      response.setHeader("X-AI-MC-TTS-Voice", openaiVoice);
+      if (geminiFallback) {
+        response.setHeader("X-AI-MC-TTS-Fallback", "gemini-error");
+      }
       response.send(buffer);
     } catch (error) {
       response.status(500).json({
