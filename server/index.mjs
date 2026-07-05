@@ -336,9 +336,17 @@ export function createApp(options = {}) {
   app.post("/api/tts", async (request, response) => {
     refreshRuntimeEnv(env, rootDir);
     const text = plainMcCopy(request.body?.text || "");
+    const requiredProvider = String(request.body?.requireProvider || "").trim().toLowerCase();
 
     if (!text) {
       response.status(400).json({ error: "읽을 답변을 입력해 주세요." });
+      return;
+    }
+
+    if (requiredProvider === "gemini" && !hasGeminiApiKey(env)) {
+      response.status(503).json({
+        error: "Gemini 음성 고정 모드입니다. GEMINI_API_KEY가 필요합니다."
+      });
       return;
     }
 
@@ -368,6 +376,13 @@ export function createApp(options = {}) {
           response.send(buffer);
           return;
         } catch (geminiError) {
+          if (requiredProvider === "gemini") {
+            response.status(502).json({
+              error: `Gemini 음성 생성에 실패했습니다. ${geminiError?.message || "잠시 후 다시 시도해 주세요."}`
+            });
+            return;
+          }
+
           if (!hasApiKey(env)) {
             throw geminiError;
           }

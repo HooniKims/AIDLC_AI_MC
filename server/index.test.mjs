@@ -292,6 +292,34 @@ describe("AI MC API", () => {
     expect(openai.audio.speech.create).toHaveBeenCalled();
   });
 
+  it("does not fall back to OpenAI when Gemini is required", async () => {
+    const openai = createMockOpenAI();
+    const fetchImpl = vi.fn(async () => ({
+      ok: false,
+      json: async () => ({
+        error: {
+          message: "Gemini temporarily unavailable"
+        }
+      })
+    }));
+    const app = createApp({
+      openai,
+      fetchImpl,
+      env: {
+        GEMINI_API_KEY: "gemini-test-key",
+        OPENAI_API_KEY: "test-key"
+      }
+    });
+
+    const response = await request(app)
+      .post("/api/tts")
+      .send({ text: "안녕하세요. AI MC입니다.", geminiVoice: "Leda", requireProvider: "gemini" })
+      .expect(502);
+
+    expect(response.body.error).toContain("Gemini");
+    expect(openai.audio.speech.create).not.toHaveBeenCalled();
+  });
+
   it("normalizes markdown copy before display or speech", () => {
     expect(plainMcCopy("1. **반가워요!**\n2. `AI MC`입니다.")).toBe("반가워요!\nAI MC입니다.");
   });

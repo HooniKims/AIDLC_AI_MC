@@ -129,7 +129,8 @@ export function useMcSession() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             text: segment,
-            geminiVoice: voice
+            geminiVoice: voice,
+            requireProvider: "gemini"
           }),
           signal
         });
@@ -148,6 +149,11 @@ export function useMcSession() {
     ).then((segments) => {
       const providers = segments.map((segment) => segment.provider).filter(Boolean);
       const provider = providers.every((provider) => provider === providers[0]) ? providers[0] || "" : "mixed";
+      if (provider !== "gemini") {
+        segments.forEach((segment) => URL.revokeObjectURL(segment.url));
+        throw new Error("Gemini 음성만 사용해야 합니다. 음성이 섞이지 않도록 재생을 중단했습니다.");
+      }
+
       const asset = {
         key,
         urls: segments.map((segment) => segment.url),

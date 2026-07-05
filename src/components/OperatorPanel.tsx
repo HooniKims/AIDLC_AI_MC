@@ -87,7 +87,7 @@ export function OperatorPanel({
         </div>
         <div className="voice-engine-card">
           <strong>Gemini 3.1 Flash TTS</strong>
-          <span>키가 없거나 실패하면 OpenAI TTS로 자동 폴백</span>
+          <span>한 답변 안에서는 Gemini 음색으로 끝까지 고정</span>
         </div>
         <label className="gemini-voice-select">
           <span>Gemini 음색</span>
