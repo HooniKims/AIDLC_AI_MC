@@ -30,6 +30,7 @@ function DemoScreen() {
             question={session.currentQuestionText}
             answer={session.approvedAnswer}
             lipFrame={session.lipFrame}
+            captionCueIndex={session.captionCueIndex}
             variant="preview"
           />
         </div>
@@ -71,6 +72,7 @@ function StageScreen() {
         question={session.currentQuestionText}
         answer={session.approvedAnswer}
         lipFrame={session.lipFrame}
+        captionCueIndex={session.captionCueIndex}
         variant="full"
       />
     </main>
@@ -89,6 +91,7 @@ function OperatorScreen() {
           question={session.currentQuestionText}
           answer={session.approvedAnswer}
           lipFrame={session.lipFrame}
+          captionCueIndex={session.captionCueIndex}
           variant="compact"
         />
         <OperatorPanel

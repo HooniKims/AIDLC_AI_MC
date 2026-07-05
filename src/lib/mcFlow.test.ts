@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { canGenerateAnswer, nextLipFrame, plainMcCopy, stageLinesForKorean, statusLabel } from "./mcFlow";
+import {
+  canGenerateAnswer,
+  nextLipFrame,
+  plainMcCopy,
+  stageCaptionLinesForKorean,
+  stageLinesForKorean,
+  statusLabel
+} from "./mcFlow";
 
 describe("mcFlow", () => {
   it("allows answer generation only for non-empty questions", () => {
@@ -35,6 +42,28 @@ describe("mcFlow", () => {
       "교사가 가장 먼저 둘러보면",
       "좋은 프로그램은",
       "무엇인가요?"
+    ]);
+  });
+
+  it("shows only the current subtitle chunk while speaking", () => {
+    const answer = "첫 번째 안내입니다. 두 번째 안내입니다. 세 번째 안내입니다.";
+
+    expect(stageCaptionLinesForKorean(answer, { isSpeaking: true, cueIndex: 0, maxLines: 2 })).toEqual([
+      "첫 번째 안내입니다.",
+      "두 번째 안내입니다."
+    ]);
+    expect(stageCaptionLinesForKorean(answer, { isSpeaking: true, cueIndex: 1, maxLines: 2 })).toEqual([
+      "세 번째 안내입니다."
+    ]);
+  });
+
+  it("keeps the full caption available when the robot is not speaking", () => {
+    const answer = "첫 번째 안내입니다. 두 번째 안내입니다. 세 번째 안내입니다.";
+
+    expect(stageCaptionLinesForKorean(answer, { isSpeaking: false, cueIndex: 0, maxLines: 2 })).toEqual([
+      "첫 번째 안내입니다.",
+      "두 번째 안내입니다.",
+      "세 번째 안내입니다."
     ]);
   });
 });

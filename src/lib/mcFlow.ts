@@ -75,6 +75,33 @@ export function stageLinesForKorean(text: string, maxChars = 26): string[] {
     );
 }
 
+interface StageCaptionOptions {
+  isSpeaking?: boolean;
+  cueIndex?: number;
+  maxChars?: number;
+  maxLines?: number;
+}
+
+export function stageCaptionLinesForKorean(text: string, options: StageCaptionOptions = {}): string[] {
+  const lines = stageLinesForKorean(text, options.maxChars);
+  if (!options.isSpeaking) {
+    return lines;
+  }
+
+  const maxLines = Math.max(1, options.maxLines ?? 2);
+  const chunks: string[][] = [];
+  for (let index = 0; index < lines.length; index += maxLines) {
+    chunks.push(lines.slice(index, index + maxLines));
+  }
+
+  if (!chunks.length) {
+    return [];
+  }
+
+  const cueIndex = Math.max(0, Math.floor(options.cueIndex ?? 0));
+  return chunks[Math.min(cueIndex, chunks.length - 1)];
+}
+
 export function statusLabel(state: RobotState): string {
   return STATUS_LABELS[state];
 }

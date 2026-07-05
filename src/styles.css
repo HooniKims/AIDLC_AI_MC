@@ -488,6 +488,8 @@ button:disabled {
 .stage-answer {
   display: grid;
   gap: 0.16em;
+  align-content: center;
+  min-height: calc(2lh + clamp(36px, 4vw, 56px));
   padding: clamp(18px, 2vw, 28px) clamp(22px, 2.4vw, 34px);
   border: 2px solid rgba(20, 10, 41, 0.06);
   border-radius: 26px 26px 26px 10px;
@@ -497,6 +499,10 @@ button:disabled {
   line-height: 1.24;
   box-shadow: 0 6px 0 rgba(42, 0, 80, 0.16), 0 14px 28px rgba(20, 10, 41, 0.12);
   backdrop-filter: blur(4px);
+}
+
+.stage-answer--speaking {
+  animation: subtitle-pop 180ms ease-out;
 }
 
 .stage-answer span {
@@ -822,6 +828,17 @@ textarea:focus {
   100% {
     opacity: 0;
     transform: translateX(-50%) scale(1.18);
+  }
+}
+
+@keyframes subtitle-pop {
+  0% {
+    opacity: 0.18;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 

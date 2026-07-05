@@ -8,6 +8,7 @@ const defaultGreeting =
 
 const geminiVoiceStorageKey = "ai-mc-gemini-voice";
 const speechPrepareDelayMs = 350;
+const captionCueIntervalMs = 1850;
 
 interface SpeechAsset {
   key: string;
@@ -54,6 +55,7 @@ export function useMcSession() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [lipFrame, setLipFrame] = useState(0);
+  const [captionCueIndex, setCaptionCueIndex] = useState(0);
   const [geminiVoice, setGeminiVoiceState] = useState(() => readStoredValue(geminiVoiceStorageKey, "Leda"));
   const [isPreparingSpeech, setIsPreparingSpeech] = useState(false);
   const [speechProvider, setSpeechProvider] = useState("");
@@ -71,6 +73,20 @@ export function useMcSession() {
     const id = window.setInterval(() => {
       setLipFrame((frame) => nextLipFrame(frame, 12));
     }, 130);
+
+    return () => window.clearInterval(id);
+  }, [robotState]);
+
+  useEffect(() => {
+    if (robotState !== "speaking") {
+      setCaptionCueIndex(0);
+      return;
+    }
+
+    setCaptionCueIndex(0);
+    const id = window.setInterval(() => {
+      setCaptionCueIndex((index) => index + 1);
+    }, captionCueIntervalMs);
 
     return () => window.clearInterval(id);
   }, [robotState]);
@@ -334,6 +350,7 @@ export function useMcSession() {
       isPreparingSpeech,
       isSpeechReady,
       lipFrame,
+      captionCueIndex,
       geminiVoice,
       speechProvider,
       currentQuestionText,
@@ -359,6 +376,7 @@ export function useMcSession() {
       isPreparingSpeech,
       isSpeechReady,
       lipFrame,
+      captionCueIndex,
       geminiVoice,
       speechProvider,
       currentQuestionText

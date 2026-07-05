@@ -1,7 +1,7 @@
 import type { RobotState } from "../types";
 import { StatusBadge } from "./StatusBadge";
 import { ConfestaBackdrop } from "./ConfestaBackdrop";
-import { stageLinesForKorean } from "../lib/mcFlow";
+import { stageCaptionLinesForKorean } from "../lib/mcFlow";
 
 const poseImages: Record<RobotState, string> = {
   idle: new URL("../../assets/characters/generated/pose-idle.png", import.meta.url).href,
@@ -24,6 +24,7 @@ interface RobotStageProps {
   question?: string;
   answer?: string;
   lipFrame?: number;
+  captionCueIndex?: number;
   variant?: "full" | "preview" | "compact";
 }
 
@@ -32,6 +33,7 @@ export function RobotStage({
   question,
   answer,
   lipFrame = 0,
+  captionCueIndex = 0,
   variant = "preview"
 }: RobotStageProps) {
   const isSpeaking = state === "speaking";
@@ -39,7 +41,12 @@ export function RobotStage({
   const activePose = isSpeaking ? speakingPoseImages[Math.floor(lipFrame / 4) % speakingPoseImages.length] : poseImages[state];
   const displayAnswer =
     answer || "안녕하세요. 저는 디지털 러닝 콘페스타의 AI MC입니다. 오늘의 배움 여정을 함께 안내할게요.";
-  const answerLines = stageLinesForKorean(displayAnswer, variant === "full" ? 34 : 28);
+  const answerLines = stageCaptionLinesForKorean(displayAnswer, {
+    cueIndex: captionCueIndex,
+    isSpeaking,
+    maxChars: variant === "full" ? 34 : 28,
+    maxLines: 2
+  });
 
   return (
     <section className={`robot-stage robot-stage--${variant}`} aria-label="AI MC 무대">
@@ -62,7 +69,10 @@ export function RobotStage({
 
       <div className="stage-caption" aria-live="polite">
         {question ? <p className="stage-question">Q. {question}</p> : null}
-        <p className="stage-answer">
+        <p
+          className={`stage-answer ${isSpeaking ? "stage-answer--speaking" : ""}`}
+          data-caption-cue={isSpeaking ? captionCueIndex : undefined}
+        >
           {answerLines.map((line) => (
             <span key={line}>{line}</span>
           ))}
