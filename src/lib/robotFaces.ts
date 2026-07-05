@@ -29,11 +29,12 @@ const speakingFaceSequence: FaceKey[] = [
 
 export const speakingFaceCount = speakingFaceSequence.length;
 
+// 기본 표정은 웃는 얼굴(open: D자형 스마일 입)
 const stateFaceMap: Record<RobotState, FaceKey> = {
-  idle: "neutral",
-  listening: "smileOpen",
+  idle: "open",
+  listening: "open",
   thinking: "slight",
-  speaking: "neutral"
+  speaking: "open"
 };
 
 export function faceForFrame(state: RobotState, lipFrame = 0, blinking = false): FaceKey {

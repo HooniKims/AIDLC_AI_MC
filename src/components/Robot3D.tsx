@@ -30,7 +30,14 @@ const FACE_PLANE = {
   tiltX: -0.15
 };
 
-const BLINK_DURATION_MS = 130;
+// 주기(period)마다 duration 동안 0→1→0으로 솟는 부드러운 펄스 (제스처 타이밍용)
+function gesturePulse(t: number, period: number, duration: number, offset = 0) {
+  const cycle = (t + offset) % period;
+  if (cycle >= duration) {
+    return 0;
+  }
+  return Math.sin((cycle / duration) * Math.PI);
+}
 
 interface RobotModelProps {
   state: RobotState;
@@ -40,7 +47,6 @@ interface RobotModelProps {
 function RobotModel({ state, lipFrame }: RobotModelProps) {
   const group = useRef<THREE.Group>(null);
   const faceMaterial = useRef<THREE.MeshBasicMaterial>(null);
-  const blinkUntil = useRef(0);
   const { scene } = useGLTF(MODEL_URL);
   const textures = useTexture(faceTextureUrls);
 
@@ -51,54 +57,41 @@ function RobotModel({ state, lipFrame }: RobotModelProps) {
     });
   }, [textures]);
 
-  useEffect(() => {
-    let timeoutId = 0;
-
-    const scheduleBlink = () => {
-      timeoutId = window.setTimeout(() => {
-        blinkUntil.current = performance.now() + BLINK_DURATION_MS;
-        scheduleBlink();
-      }, 3200 + Math.random() * 2400);
-    };
-
-    scheduleBlink();
-    return () => window.clearTimeout(timeoutId);
-  }, []);
-
   useFrame((frameState, delta) => {
     const robot = group.current;
     if (!robot) {
       return;
     }
 
+    // 시선은 항상 정면: rotY(좌우 돌림)는 쓰지 않는다
     const t = frameState.clock.elapsedTime;
     let targetY = Math.sin(t * 1.6) * 0.018;
     let targetRotX = 0;
-    let targetRotY = Math.sin(t * 0.5) * 0.04;
-    let targetRotZ = Math.sin(t * 0.9) * 0.02;
+    let targetRotZ = 0;
 
-    if (state === "listening") {
-      targetRotX = 0.05 + Math.sin(t * 2.1) * 0.015;
-      targetRotY = Math.sin(t * 1.1) * 0.06;
+    if (state === "idle") {
+      // 8.5초마다 꾸벅 인사, 13초마다 살짝 갸웃
+      targetRotX = gesturePulse(t, 8.5, 1.2) * 0.09;
+      targetRotZ = gesturePulse(t, 13, 1.6, 5) * 0.07;
+    } else if (state === "listening") {
+      // 경청: 살짝 앞으로 기울이고 가끔 끄덕임
+      targetRotX = 0.04 + gesturePulse(t, 3.2, 0.9) * 0.05;
     } else if (state === "thinking") {
       targetY = Math.sin(t * 1.1) * 0.014;
-      targetRotY = 0.14 + Math.sin(t * 0.7) * 0.03;
-      targetRotZ = 0.07;
+      targetRotZ = 0.06;
     } else if (state === "speaking") {
       targetY = Math.sin(t * 2.6) * 0.026;
-      targetRotX = Math.sin(t * 3.2) * 0.03;
-      targetRotY = Math.sin(t * 1.4) * 0.07;
-      targetRotZ = Math.sin(t * 2.2) * 0.025;
+      targetRotX = Math.sin(t * 3.2) * 0.028;
+      targetRotZ = Math.sin(t * 2.2) * 0.02;
     }
 
     const smoothing = 1 - Math.exp(-6 * delta);
     robot.position.y = THREE.MathUtils.lerp(robot.position.y, targetY, smoothing);
     robot.rotation.x = THREE.MathUtils.lerp(robot.rotation.x, targetRotX, smoothing);
-    robot.rotation.y = THREE.MathUtils.lerp(robot.rotation.y, targetRotY, smoothing);
+    robot.rotation.y = THREE.MathUtils.lerp(robot.rotation.y, 0, smoothing);
     robot.rotation.z = THREE.MathUtils.lerp(robot.rotation.z, targetRotZ, smoothing);
 
-    const blinking = performance.now() < blinkUntil.current;
-    const faceKey = faceForFrame(state, lipFrame, blinking);
+    const faceKey = faceForFrame(state, lipFrame);
     const texture = textures[faceKey];
     if (faceMaterial.current && faceMaterial.current.map !== texture) {
       faceMaterial.current.map = texture;

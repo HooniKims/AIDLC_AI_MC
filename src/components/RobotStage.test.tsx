@@ -91,8 +91,8 @@ describe("RobotStage 3D robot", () => {
     expect(container.querySelectorAll(".robot-canvas")).toHaveLength(1);
   });
 
-  it("keeps a calm face while idle", () => {
+  it("keeps a smiling face while idle", () => {
     const { container } = render(<RobotStage state="idle" lipFrame={0} />);
-    expect(container.querySelector<HTMLElement>(".robot-wrap")?.dataset.faceKey).toBe("neutral");
+    expect(container.querySelector<HTMLElement>(".robot-wrap")?.dataset.faceKey).toBe("open");
   });
 });

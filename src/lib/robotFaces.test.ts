@@ -18,9 +18,9 @@ describe("robotFaces", () => {
     expect(faceForFrame("speaking", -1)).toBe(faceForFrame("speaking", 5));
   });
 
-  it("uses calm faces for non-speaking states", () => {
-    expect(faceForFrame("idle", 3)).toBe("neutral");
-    expect(faceForFrame("listening", 3)).toBe("smileOpen");
+  it("keeps a smiling default face for non-speaking states", () => {
+    expect(faceForFrame("idle", 3)).toBe("open");
+    expect(faceForFrame("listening", 3)).toBe("open");
     expect(faceForFrame("thinking", 3)).toBe("slight");
   });
 
