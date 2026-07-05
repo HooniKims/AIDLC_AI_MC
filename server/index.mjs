@@ -25,7 +25,7 @@ const mcInstructions = `
 너는 2026 AI·디지털 러닝 콘페스타의 AI MC다.
 한국어로 답한다.
 귀엽지만 유치하지 않고, 교육 행사 진행자답게 차분하고 신뢰감 있게 말한다.
-답변은 2~4문장으로 짧게 한다.
+질문을 되짚는 첫 문장은 시스템이 자동으로 붙인다. 너는 답변 본문만 1~3문장으로 짧게 작성한다.
 마크다운 문법, 불릿, 번호 목록, 굵게 표시 기호를 쓰지 말고 자연스러운 진행자 대사문으로만 답한다.
 행사와 AI·디지털 학습 관련 질문, 가벼운 캐릭터 대화에는 답한다.
 정치, 혐오, 개인정보, 의료/법률 조언, 확인되지 않은 운영 정보는 정중히 피한다.
@@ -85,6 +85,63 @@ export function plainMcCopy(text) {
     .replace(/[*_~`]/g, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function hasFinalConsonant(text) {
+  const lastHangul = Array.from(String(text || ""))
+    .reverse()
+    .find((char) => /[가-힣]/u.test(char));
+
+  if (!lastHangul) {
+    return false;
+  }
+
+  return (lastHangul.charCodeAt(0) - 0xac00) % 28 > 0;
+}
+
+function subjectParticle(text) {
+  return hasFinalConsonant(text) ? "이" : "가";
+}
+
+function questionTopic(question) {
+  const topic = plainMcCopy(question)
+    .replace(/^[Qq][.:：]\s*/u, "")
+    .replace(/[?!.,。！？]+$/u, "")
+    .replace(/\s*(이|가|은|는)?\s*(어떻게\s*(되나요|되죠|됩니까|될까요)|어디인가요|어디예요|어디죠|언제인가요|언제예요|무엇인가요|무엇이에요|뭔가요|뭐예요|있나요|있을까요|알\s*수\s*있나요|알려\s*주세요|궁금해요|궁금합니다|부탁해요|인가요|나요|까요)\s*$/u, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return topic || plainMcCopy(question).replace(/[?!.,。！？]+$/u, "").trim() || "그 부분";
+}
+
+function questionLeadIndex(topic) {
+  return Array.from(topic).reduce((sum, char) => sum + char.codePointAt(0), 0) % 4;
+}
+
+function questionAcknowledgement(question) {
+  const topic = questionTopic(question);
+  const leads = [
+    `${topic}${subjectParticle(topic)} 궁금하시군요!`,
+    `${topic}에 대해 질문해 주셨네요!`,
+    `${topic}부터 함께 살펴볼게요!`,
+    `${topic}${subjectParticle(topic)} 핵심이군요!`
+  ];
+
+  return leads[questionLeadIndex(topic)];
+}
+
+function alreadyAcknowledgesQuestion(answer) {
+  const opening = plainMcCopy(answer).slice(0, 90);
+  return /궁금하시군요|질문해\s*주셨네요|함께\s*살펴볼게요|핵심이군요/u.test(opening);
+}
+
+function answerWithQuestionAcknowledgement(question, answer) {
+  const cleanAnswer = plainMcCopy(answer);
+  if (!cleanAnswer || alreadyAcknowledgesQuestion(cleanAnswer)) {
+    return cleanAnswer;
+  }
+
+  return `${questionAcknowledgement(question)} ${cleanAnswer}`.trim();
 }
 
 function ttsSpeed(env) {
@@ -395,7 +452,7 @@ export function createApp(options = {}) {
         instructions: mcInstructions,
         input: `관객 질문: ${question}`
       });
-      const answer = plainMcCopy(extractOutputText(result));
+      const answer = answerWithQuestionAcknowledgement(question, extractOutputText(result));
 
       response.json({
         answer: answer || "답변을 생성하지 못했습니다. 질문을 조금 다르게 입력해 주세요.",

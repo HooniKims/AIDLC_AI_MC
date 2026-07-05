@@ -115,6 +115,25 @@ describe("AI MC API", () => {
     );
   });
 
+  it("starts generated answers by acknowledging the audience question", async () => {
+    const openai = createMockOpenAI();
+    const app = createApp({
+      openai,
+      env: {
+        OPENAI_API_KEY: "test-key"
+      }
+    });
+
+    const response = await request(app)
+      .post("/api/generate-answer")
+      .send({ question: "행사 장소와 일정이 어떻게 되나요?" })
+      .expect(200);
+
+    expect(response.body.answer).toMatch(/^행사 장소와 일정/);
+    expect(response.body.answer).toMatch(/궁금하시군요|질문해 주셨네요|살펴볼게요|핵심이군요/);
+    expect(response.body.answer).toContain("코엑스 마곡");
+  });
+
   it("rejects empty questions before calling OpenAI", async () => {
     const openai = createMockOpenAI();
     const app = createApp({
