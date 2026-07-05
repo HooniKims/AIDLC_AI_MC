@@ -19,6 +19,18 @@ export function nextLipFrame(currentFrame: number, totalFrames: number): number 
   return (currentFrame + 1) % totalFrames;
 }
 
+export function plainMcCopy(text: string): string {
+  return text
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/^>\s?/gm, "")
+    .replace(/^\s*[-*+]\s+/gm, "")
+    .replace(/^\s*\d+[.)]\s+/gm, "")
+    .replace(/[*_~`]/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export function statusLabel(state: RobotState): string {
   return STATUS_LABELS[state];
 }

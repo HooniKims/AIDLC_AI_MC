@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canGenerateAnswer, nextLipFrame, statusLabel } from "./mcFlow";
+import { canGenerateAnswer, nextLipFrame, plainMcCopy, statusLabel } from "./mcFlow";
 
 describe("mcFlow", () => {
   it("allows answer generation only for non-empty questions", () => {
@@ -17,5 +17,11 @@ describe("mcFlow", () => {
     expect(statusLabel("listening")).toBe("질문 확인 중");
     expect(statusLabel("thinking")).toBe("답변 작성 중");
     expect(statusLabel("speaking")).toBe("답변 중");
+  });
+
+  it("removes visible markdown markers from generated MC copy", () => {
+    expect(plainMcCopy("## 안내\n- **행사는** [공식 사이트](https://adl-confesta.kr/)에서 확인해요.")).toBe(
+      "안내\n행사는 공식 사이트에서 확인해요."
+    );
   });
 });

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { sampleQuestions } from "../data/sampleQuestions";
-import { nextLipFrame } from "../lib/mcFlow";
+import { nextLipFrame, plainMcCopy } from "../lib/mcFlow";
 import type { AudienceQuestion, RobotState } from "../types";
 
 const defaultGreeting =
@@ -79,7 +79,7 @@ export function useMcSession() {
         throw new Error(payload.error || "답변 생성에 실패했습니다.");
       }
 
-      setDraftAnswer(payload.answer);
+      setDraftAnswer(plainMcCopy(payload.answer || ""));
       setRobotState("listening");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "답변 생성에 실패했습니다.");
@@ -90,7 +90,7 @@ export function useMcSession() {
   }
 
   function approveDraft() {
-    const answer = draftAnswer.trim();
+    const answer = plainMcCopy(draftAnswer);
     if (!answer) {
       return;
     }
@@ -105,7 +105,7 @@ export function useMcSession() {
   }
 
   async function speak() {
-    const text = approvedAnswer.trim();
+    const text = plainMcCopy(approvedAnswer);
     if (!text) {
       return;
     }

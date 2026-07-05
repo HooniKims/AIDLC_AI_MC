@@ -63,10 +63,11 @@ Stage screens should use `--confesta-hero-bg` as the dominant field. Operator sc
 
 ## Typography
 
-- Primary UI font: Pretendard.
-- Accent display text: rounded, playful Korean display styling inspired by the site.
+- Primary UI font: Paperlogy.
+- Use the local WOFF2 files in `public/fonts/` so event demos do not depend on a font CDN.
+- Accent display text should use Paperlogy 800/900 weights for a rounded, presentation-friendly Korean feel.
 - Use big display type only for stage status and the robot's spoken message.
-- Operator controls should be dense, readable, and work-focused.
+- Operator controls should be large enough for mobile checks and readable at a glance in the venue.
 - Letter spacing should stay at `0`; do not use negative tracking.
 
 ## Stage Composition

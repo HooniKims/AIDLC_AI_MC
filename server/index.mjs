@@ -22,6 +22,7 @@ const mcInstructions = `
 한국어로 답한다.
 귀엽지만 유치하지 않고, 교육 행사 진행자답게 차분하고 신뢰감 있게 말한다.
 답변은 2~4문장으로 짧게 한다.
+마크다운 문법, 불릿, 번호 목록, 굵게 표시 기호를 쓰지 말고 자연스러운 진행자 대사문으로만 답한다.
 행사와 AI·디지털 학습 관련 질문, 가벼운 캐릭터 대화에는 답한다.
 정치, 혐오, 개인정보, 의료/법률 조언, 확인되지 않은 운영 정보는 정중히 피한다.
 공식 사이트에서 확인된 내용과 일반적인 교육 관점만 사용한다.
@@ -39,6 +40,27 @@ function envValue(env, key, fallback) {
 
 function hasApiKey(env) {
   return Boolean(envValue(env, "OPENAI_API_KEY", "").trim());
+}
+
+export function plainMcCopy(text) {
+  return String(text || "")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/^>\s?/gm, "")
+    .replace(/^\s*[-*+]\s+/gm, "")
+    .replace(/^\s*\d+[.)]\s+/gm, "")
+    .replace(/[*_~`]/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function ttsSpeed(env) {
+  const speed = Number(envValue(env, "OPENAI_TTS_SPEED", "1.18"));
+  if (!Number.isFinite(speed)) {
+    return 1.18;
+  }
+
+  return Math.min(4, Math.max(0.25, speed));
 }
 
 function getOpenAIClient(openai, env) {
@@ -78,6 +100,8 @@ export function createApp(options = {}) {
       ok: true,
       model: envValue(env, "OPENAI_MODEL", "gpt-5.4-mini"),
       ttsModel: envValue(env, "OPENAI_TTS_MODEL", "gpt-4o-mini-tts"),
+      ttsVoice: envValue(env, "OPENAI_TTS_VOICE", "shimmer"),
+      ttsSpeed: ttsSpeed(env),
       hasApiKey: hasApiKey(env)
     });
   });
@@ -107,7 +131,7 @@ export function createApp(options = {}) {
         instructions: mcInstructions,
         input: `관객 질문: ${question}`
       });
-      const answer = extractOutputText(result);
+      const answer = plainMcCopy(extractOutputText(result));
 
       response.json({
         answer: answer || "답변을 생성하지 못했습니다. 질문을 조금 다르게 입력해 주세요.",
@@ -121,7 +145,7 @@ export function createApp(options = {}) {
   });
 
   app.post("/api/tts", async (request, response) => {
-    const text = String(request.body?.text || "").trim();
+    const text = plainMcCopy(request.body?.text || "");
 
     if (!text) {
       response.status(400).json({ error: "읽을 답변을 입력해 주세요." });
@@ -139,9 +163,11 @@ export function createApp(options = {}) {
       const client = getOpenAIClient(options.openai, env);
       const audio = await client.audio.speech.create({
         model: envValue(env, "OPENAI_TTS_MODEL", "gpt-4o-mini-tts"),
-        voice: envValue(env, "OPENAI_TTS_VOICE", "coral"),
+        voice: envValue(env, "OPENAI_TTS_VOICE", "shimmer"),
         input: text,
-        instructions: "밝고 차분한 한국어 행사 진행자처럼 말해 주세요."
+        instructions:
+          "한국어로 말해 주세요. 귀여운 AI 로봇 마스코트처럼 밝고 높은 톤, 짧은 호흡, 살짝 빠른 템포로 말하되 발음은 또렷하게 유지해 주세요. 낮고 진지한 아나운서 톤은 피하고, 어린 캐릭터처럼 사랑스럽지만 행사 진행자로서 과장되지 않게 말해 주세요.",
+        speed: ttsSpeed(env)
       });
       const buffer = Buffer.from(await audio.arrayBuffer());
 
