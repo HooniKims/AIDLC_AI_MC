@@ -54,6 +54,7 @@ Create `package.json` with:
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
+    "dotenv": "latest",
     "express": "latest",
     "openai": "latest",
     "react": "latest",
@@ -86,7 +87,8 @@ Create `.env.example` with:
 
 ```bash
 OPENAI_API_KEY=
-OPENAI_MODEL=gpt-5.5
+OPENAI_MODEL=gpt-5.4-mini
+OPENAI_REASONING_EFFORT=low
 OPENAI_TTS_MODEL=gpt-4o-mini-tts
 OPENAI_TTS_VOICE=coral
 ```
