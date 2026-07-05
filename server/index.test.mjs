@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { createApp, plainMcCopy } from "./index.mjs";
+import { createVercelApiHandler } from "./vercelHandler.mjs";
 
 function createMockOpenAI() {
   return {
@@ -98,6 +99,7 @@ describe("AI MC API", () => {
     const app = createApp({
       fetchImpl,
       env: {
+        OPENAI_API_KEY: "",
         GEMINI_API_KEY: "gemini-test-key",
         GEMINI_TTS_MODEL: "gemini-3.1-flash-tts-preview",
         GEMINI_TTS_VOICE: "Leda"
@@ -132,6 +134,7 @@ describe("AI MC API", () => {
     const app = createApp({
       openai,
       env: {
+        GEMINI_API_KEY: "",
         OPENAI_API_KEY: "test-key",
         OPENAI_TTS_MODEL: "gpt-4o-mini-tts",
         OPENAI_TTS_VOICE: "shimmer",
@@ -202,5 +205,16 @@ describe("AI MC API", () => {
 
     const response = await request(app).get("/demo").expect(200);
     expect(response.text).toContain("AI MC fallback");
+  });
+
+  it("routes Vercel /api function requests back to the Express API path", async () => {
+    const handler = createVercelApiHandler("/api/generate-answer", {
+      env: {
+        OPENAI_API_KEY: ""
+      }
+    });
+
+    const response = await request(handler).post("/").send({ question: "행사 장소가 어디인가요?" }).expect(503);
+    expect(response.body.error).toContain("OPENAI_API_KEY");
   });
 });

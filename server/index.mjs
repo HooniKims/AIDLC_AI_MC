@@ -245,9 +245,9 @@ export function createApp(options = {}) {
       return;
     }
 
-    if (!hasApiKey(env)) {
+    if (!hasGeminiApiKey(env) && !hasApiKey(env)) {
       response.status(503).json({
-        error: "OPENAI_API_KEY가 없습니다. 프로젝트 폴더의 .env 파일에 키를 입력해 주세요."
+        error: "GEMINI_API_KEY 또는 OPENAI_API_KEY가 필요합니다. 프로젝트 폴더의 .env 파일에 키를 입력해 주세요."
       });
       return;
     }
