@@ -153,7 +153,7 @@ export function createApp(options = {}) {
   if (options.serveClient) {
     const distDir = path.join(rootDir, "dist");
     app.use(express.static(distDir));
-    app.get("*", (_request, response) => {
+    app.get(/.*/, (_request, response) => {
       response.sendFile(path.join(distDir, "index.html"));
     });
   }
@@ -169,7 +169,7 @@ async function startServer() {
   if (process.env.NODE_ENV === "production") {
     const distDir = path.join(rootDir, "dist");
     app.use(express.static(distDir));
-    app.get("*", (_request, response) => {
+    app.get(/.*/, (_request, response) => {
       response.sendFile(path.join(distDir, "index.html"));
     });
   } else {
@@ -181,7 +181,7 @@ async function startServer() {
     });
 
     app.use(vite.middlewares);
-    app.use("*", async (request, response, next) => {
+    app.use(async (request, response, next) => {
       try {
         const template = fs.readFileSync(path.join(rootDir, "index.html"), "utf-8");
         const html = await vite.transformIndexHtml(request.originalUrl, template);

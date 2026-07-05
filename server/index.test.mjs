@@ -1,4 +1,7 @@
 import request from "supertest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { createApp } from "./index.mjs";
 
@@ -101,5 +104,17 @@ describe("AI MC API", () => {
         voice: "coral"
       })
     );
+  });
+
+  it("creates the production SPA fallback without invalid Express routes", async () => {
+    const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "ai-mc-server-"));
+    const distDir = path.join(rootDir, "dist");
+    fs.mkdirSync(distDir);
+    fs.writeFileSync(path.join(distDir, "index.html"), "<main>AI MC fallback</main>");
+
+    const app = createApp({ rootDir, serveClient: true });
+
+    const response = await request(app).get("/demo").expect(200);
+    expect(response.text).toContain("AI MC fallback");
   });
 });
