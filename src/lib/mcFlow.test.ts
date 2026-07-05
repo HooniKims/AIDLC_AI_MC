@@ -1,0 +1,21 @@
+import { describe, expect, it } from "vitest";
+import { canGenerateAnswer, nextLipFrame, statusLabel } from "./mcFlow";
+
+describe("mcFlow", () => {
+  it("allows answer generation only for non-empty questions", () => {
+    expect(canGenerateAnswer("행사 장소가 어디인가요?")).toBe(true);
+    expect(canGenerateAnswer("   ")).toBe(false);
+  });
+
+  it("cycles lip frames while speaking", () => {
+    expect(nextLipFrame(0, 6)).toBe(1);
+    expect(nextLipFrame(5, 6)).toBe(0);
+  });
+
+  it("returns Korean status labels for the robot state", () => {
+    expect(statusLabel("idle")).toBe("대기 중");
+    expect(statusLabel("listening")).toBe("질문 확인 중");
+    expect(statusLabel("thinking")).toBe("답변 작성 중");
+    expect(statusLabel("speaking")).toBe("답변 중");
+  });
+});
