@@ -37,6 +37,38 @@ function createMockGeminiFetch() {
   }));
 }
 
+function createMockGeminiStreamFetch() {
+  const streamText = [
+    "event: step.delta",
+    `data: ${JSON.stringify({
+      index: 0,
+      delta: {
+        mime_type: "audio/l16",
+        data: Buffer.from([1, 2]).toString("base64")
+      },
+      event_type: "step.delta"
+    })}`,
+    "",
+    "event: step.delta",
+    `data: ${JSON.stringify({
+      index: 0,
+      delta: {
+        mime_type: "audio/l16",
+        data: Buffer.from([3, 4]).toString("base64")
+      },
+      event_type: "step.delta"
+    })}`,
+    ""
+  ].join("\n");
+
+  return vi.fn(async () => new Response(streamText, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/event-stream"
+    }
+  }));
+}
+
 describe("AI MC API", () => {
   it("returns a clear 503 when the OpenAI API key is missing", async () => {
     const app = createApp({
@@ -128,9 +160,37 @@ describe("AI MC API", () => {
     );
     const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
     expect(body.model).toBe("gemini-3.1-flash-tts-preview");
+    expect(body.stream).toBe(true);
     expect(body.generation_config.speech_config[0].voice).toBe("Puck");
     expect(body.input).toContain("어린 캐릭터");
     expect(body.input).toContain("[very fast]");
+    expect(fetchImpl.mock.calls[0][1].headers).toEqual(
+      expect.objectContaining({
+        "Api-Revision": "2026-05-20"
+      })
+    );
+  });
+
+  it("reads streamed Gemini audio deltas", async () => {
+    const fetchImpl = createMockGeminiStreamFetch();
+    const app = createApp({
+      fetchImpl,
+      env: {
+        OPENAI_API_KEY: "",
+        GEMINI_API_KEY: "gemini-test-key",
+        GEMINI_TTS_MODEL: "gemini-3.1-flash-tts-preview",
+        GEMINI_TTS_VOICE: "Leda"
+      }
+    });
+
+    const response = await request(app)
+      .post("/api/tts")
+      .send({ text: "안녕하세요. AI MC입니다.", geminiVoice: "Leda" })
+      .expect(200);
+
+    expect(response.headers["content-type"]).toContain("audio/wav");
+    expect(response.headers["x-ai-mc-tts-provider"]).toBe("gemini");
+    expect(response.body.length).toBe(48);
   });
 
   it("reads Gemini REST audio from interaction steps", async () => {

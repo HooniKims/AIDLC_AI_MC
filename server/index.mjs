@@ -107,6 +107,78 @@ function geminiAudioData(payload) {
   );
 }
 
+function extractGeminiStreamAudio(eventText) {
+  const dataText = eventText
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).trimStart())
+    .join("\n")
+    .trim();
+
+  if (!dataText || dataText === "[DONE]") {
+    return null;
+  }
+
+  try {
+    const payload = JSON.parse(dataText);
+    const delta = payload?.delta;
+    const mimeType = delta?.mime_type || delta?.mimeType || "";
+
+    if (delta?.data && (String(mimeType).startsWith("audio/") || delta?.type === "audio")) {
+      return Buffer.from(delta.data, "base64");
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+async function collectGeminiStreamAudio(response) {
+  const reader = response.body?.getReader?.();
+  if (!reader) {
+    throw new Error("Gemini TTS 스트림을 읽을 수 없습니다.");
+  }
+
+  const decoder = new TextDecoder();
+  const audioChunks = [];
+  let pending = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) {
+      break;
+    }
+
+    pending += decoder.decode(value, { stream: true });
+
+    while (pending.includes("\n\n")) {
+      const boundary = pending.indexOf("\n\n");
+      const eventText = pending.slice(0, boundary);
+      pending = pending.slice(boundary + 2);
+      const audio = extractGeminiStreamAudio(eventText);
+
+      if (audio) {
+        audioChunks.push(audio);
+      }
+    }
+  }
+
+  pending += decoder.decode();
+  if (pending.trim()) {
+    const audio = extractGeminiStreamAudio(pending);
+    if (audio) {
+      audioChunks.push(audio);
+    }
+  }
+
+  if (!audioChunks.length) {
+    throw new Error("Gemini TTS 스트림에 오디오 데이터가 없습니다.");
+  }
+
+  return Buffer.concat(audioChunks);
+}
+
 function wavFromPcm(pcm, sampleRate = 24000, channels = 1, bitsPerSample = 16) {
   const byteRate = sampleRate * channels * (bitsPerSample / 8);
   const blockAlign = channels * (bitsPerSample / 8);
@@ -134,7 +206,8 @@ async function createGeminiSpeech({ env, fetchImpl, text, voice }) {
     method: "POST",
     headers: {
       "x-goog-api-key": envValue(env, "GEMINI_API_KEY", ""),
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      "Api-Revision": "2026-05-20"
     },
     body: JSON.stringify({
       model: envValue(env, "GEMINI_TTS_MODEL", "gemini-3.1-flash-tts-preview"),
@@ -148,15 +221,22 @@ async function createGeminiSpeech({ env, fetchImpl, text, voice }) {
             voice: voice || envValue(env, "GEMINI_TTS_VOICE", "Leda")
           }
         ]
-      }
+      },
+      stream: true
     })
   });
-  const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
     throw new Error(payload?.error?.message || "Gemini TTS 호출에 실패했습니다.");
   }
 
+  const contentType = response.headers?.get?.("content-type") || "";
+  if (contentType.includes("text/event-stream")) {
+    return wavFromPcm(await collectGeminiStreamAudio(response));
+  }
+
+  const payload = await response.json().catch(() => ({}));
   const audioData = geminiAudioData(payload);
   if (!audioData) {
     throw new Error("Gemini TTS 응답에 오디오 데이터가 없습니다.");
