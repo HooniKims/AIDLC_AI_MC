@@ -106,6 +106,12 @@ The first prototype uses cropped regions from the sheet:
 
 The implementation should isolate character rendering behind a component so the sheet can later be replaced by a GLB/Three.js model.
 
+## Visual Design Source
+
+Use the official site design direction documented in `DESIGN.md`.
+
+The prototype should use `assets/site/confesta-ice-cream-cone.png` as the main event key visual, especially on `/demo` and `/stage`. The ice cream visual should work as the background anchor while the robot remains the foreground MC.
+
 ## Architecture
 
 Use a Vite React app.
