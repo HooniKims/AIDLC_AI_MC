@@ -641,8 +641,10 @@ button:disabled {
   backdrop-filter: blur(4px);
 }
 
+/* 등장만 애니메이션한다. 사라지는 프레임을 넣으면 오디오 싱크로 자막이
+   길게 유지될 때 애니메이션 종료와 함께 자막이 투명해져 버린다. */
 .stage-answer--speaking {
-  animation: subtitle-rise-fade 1850ms ease-in-out both;
+  animation: subtitle-rise-in 420ms ease-out both;
 }
 
 .stage-answer span {
@@ -971,19 +973,14 @@ textarea:focus {
   }
 }
 
-@keyframes subtitle-rise-fade {
+@keyframes subtitle-rise-in {
   0% {
     opacity: 0;
     transform: translateY(14px);
   }
-  12%,
-  76% {
+  100% {
     opacity: 1;
     transform: translateY(0);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-16px);
   }
 }
 
