@@ -12,7 +12,9 @@ import {
   type LiveQuestion
 } from "../lib/liveQueue";
 
-const PREFETCH_COUNT = 3;
+// 답변 준비된 질문의 TTS를 미리 받아둘 개수. Gemini 생성이 10~20초 걸리므로
+// 넉넉히 잡아 운영자가 순서를 건너뛰어도 침묵 대기가 없게 한다.
+const PREFETCH_COUNT = 8;
 
 function askUrl(): string {
   if (typeof window === "undefined") {

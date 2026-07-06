@@ -264,11 +264,22 @@ export function useStagePlayer(): StagePlayer {
       if (!clean) {
         return;
       }
+      // 오디오가 준비된 뒤에만 말하기 상태로 전환한다.
+      // 프리페치가 안 된 항목은 Gemini 생성에 10~20초가 걸리는데, 먼저 speaking으로
+      // 들어가면 그동안 로봇이 소리 없이 입만 움직인다 (실측으로 확인된 사고).
+      // 준비 중에는 thinking 상태로 대기 연출을 유지한다.
+      setRobotState("thinking");
+      let asset;
+      try {
+        asset = await fetchAsset(clean);
+      } catch (caught) {
+        setRobotState("idle");
+        throw caught;
+      }
       setSpokenText(clean);
       setIsSpeaking(true);
       setRobotState("speaking");
       try {
-        const asset = await fetchAsset(clean);
         activeAssetRef.current = asset;
         await new Promise<void>((resolve, reject) => {
           const audio = new Audio(asset.url);
