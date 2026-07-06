@@ -1,5 +1,5 @@
 import type { AudienceQuestion, RobotState } from "../types";
-import type { TtsEngine } from "../hooks/useMcSession";
+import { elevenVoiceOptions, type TtsEngine } from "../hooks/useMcSession";
 import { canGenerateAnswer } from "../lib/mcFlow";
 import { StatusBadge } from "./StatusBadge";
 
@@ -11,16 +11,9 @@ const geminiVoiceOptions = [
   { value: "Laomedeia", label: "Laomedeia · 업비트" }
 ];
 
-const elevenVoiceOptions = [
-  { value: "cgSgspJ2msm6clMCkdW9", label: "Jessica · 발랄하고 밝음" },
-  { value: "FGY2WhTYpPnrIDTdsKH5", label: "Laura · 햇살 같은 활기" },
-  { value: "hpp4J3VqNfWAUOO0d1Us", label: "Bella · 프로페셔널 · 따뜻함" },
-  { value: "EXAVITQu4vr4xnSDxMaL", label: "Sarah · 차분한 신뢰감" }
-];
-
 const engineOptions: { value: TtsEngine; label: string }[] = [
-  { value: "elevenlabs", label: "ElevenLabs (기본)" },
-  { value: "gemini", label: "Gemini" }
+  { value: "elevenlabs", label: "ElevenLabs (기본 · Gemini 자동 폴백)" },
+  { value: "gemini", label: "Gemini 고정" }
 ];
 
 interface OperatorPanelProps {
@@ -86,7 +79,9 @@ export function OperatorPanel({
     isSpeechReady && speechProvider === "elevenlabs"
       ? "ElevenLabs 음색 준비 완료"
       : isSpeechReady && speechProvider === "gemini"
-        ? "Gemini 음색 준비 완료"
+        ? ttsEngine === "elevenlabs"
+          ? "Gemini 폴백 음성 준비 완료"
+          : "Gemini 음색 준비 완료"
         : isSpeechReady && speechProvider === "openai"
           ? "OpenAI 폴백 음성 준비 완료"
           : isPreparingSpeech

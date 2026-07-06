@@ -111,7 +111,7 @@ describe("AI MC API", () => {
       expect.objectContaining({
         model: "gpt-5.4-mini",
         reasoning: { effort: "low" },
-        instructions: expect.stringContaining("밝고 명랑")
+        instructions: expect.stringContaining("상큼 발랄")
       })
     );
   });
@@ -146,6 +146,66 @@ describe("AI MC API", () => {
 
     await request(app).post("/api/generate-answer").send({ question: " " }).expect(400);
     expect(openai.responses.create).not.toHaveBeenCalled();
+  });
+
+  it("prefers ElevenLabs when its key exists and no provider is required", async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      if (String(url).includes("api.elevenlabs.io")) {
+        return {
+          ok: true,
+          arrayBuffer: async () => Buffer.from([9, 9, 9, 9]).buffer
+        };
+      }
+      throw new Error("unexpected fetch: " + url);
+    });
+    const app = createApp({
+      fetchImpl,
+      env: {
+        OPENAI_API_KEY: "",
+        GEMINI_API_KEY: "gemini-test-key",
+        ELEVENLABS_API_KEY: "eleven-test-key",
+        ELEVENLABS_VOICE_ID: "voice-default"
+      }
+    });
+
+    const response = await request(app)
+      .post("/api/tts")
+      .send({ text: "안녕하세요.", elevenVoice: "voice-custom" })
+      .expect(200);
+
+    expect(response.headers["x-ai-mc-tts-provider"]).toBe("elevenlabs");
+    expect(response.headers["x-ai-mc-tts-voice"]).toBe("voice-custom");
+    expect(response.headers["content-type"]).toContain("audio/mpeg");
+  });
+
+  it("falls back to Gemini when ElevenLabs fails in auto mode", async () => {
+    const geminiMock = createMockGeminiFetch();
+    const fetchImpl = vi.fn(async (url, options) => {
+      if (String(url).includes("api.elevenlabs.io")) {
+        return {
+          ok: false,
+          json: async () => ({ detail: { message: "quota exceeded" } })
+        };
+      }
+      return geminiMock(url, options);
+    });
+    const app = createApp({
+      fetchImpl,
+      env: {
+        OPENAI_API_KEY: "",
+        GEMINI_API_KEY: "gemini-test-key",
+        ELEVENLABS_API_KEY: "eleven-test-key",
+        GEMINI_TTS_VOICE: "Leda"
+      }
+    });
+
+    const response = await request(app)
+      .post("/api/tts")
+      .send({ text: "안녕하세요." })
+      .expect(200);
+
+    expect(response.headers["x-ai-mc-tts-provider"]).toBe("gemini");
+    expect(response.headers["content-type"]).toContain("audio/wav");
   });
 
   it("uses Gemini 2.5 Flash TTS as the primary speech engine by default", async () => {

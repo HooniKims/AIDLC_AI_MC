@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { sampleQuestions } from "../data/sampleQuestions";
-import { nextLipFrame, plainMcCopy } from "../lib/mcFlow";
+import { captionCueIndexForProgress, nextLipFrame, plainMcCopy } from "../lib/mcFlow";
 import { speakingFaceCount } from "../lib/robotFaces";
 import type { AudienceQuestion, RobotState } from "../types";
 
@@ -13,7 +13,17 @@ const elevenVoiceStorageKey = "ai-mc-eleven-voice";
 
 export type TtsEngine = "elevenlabs" | "gemini";
 export const defaultTtsEngine: TtsEngine = "elevenlabs";
-export const defaultElevenVoiceId = "cgSgspJ2msm6clMCkdW9"; // Jessica
+
+// 한국어 네이티브 음색 (ElevenLabs 라이브러리, 유료 플랜 필요)
+export const elevenVoiceOptions = [
+  { value: "bQlkYuipD5BHEhntA5iz", label: "JY · 상큼 발랄 업비트 (기본)" },
+  { value: "OSwaPSNdfituxkWcjlkR", label: "Kano · 귀여운 애니 캐릭터" },
+  { value: "Lb7qkOn5hF8p7qfCDH8q", label: "Annie · 부드럽고 귀여움" },
+  { value: "6aXW46RTUz6Y2lkBGQ1a", label: "Farida · 활기차고 밝음" },
+  { value: "cgSgspJ2msm6clMCkdW9", label: "Jessica · 영어권 발랄 (예비)" }
+] as const;
+
+export const defaultElevenVoiceId = elevenVoiceOptions[0].value; // JY
 
 const engineLabels: Record<TtsEngine, string> = {
   elevenlabs: "ElevenLabs",
@@ -90,9 +100,11 @@ export function useMcSession() {
     const stored = readStoredValue(ttsEngineStorageKey, defaultTtsEngine);
     return stored === "gemini" ? "gemini" : "elevenlabs";
   });
-  const [elevenVoice, setElevenVoiceState] = useState(() =>
-    readStoredValue(elevenVoiceStorageKey, defaultElevenVoiceId)
-  );
+  const [elevenVoice, setElevenVoiceState] = useState(() => {
+    const stored = readStoredValue(elevenVoiceStorageKey, defaultElevenVoiceId);
+    // 예전 세션에 저장된 폐기 음색이면 기본 음색으로 되돌린다
+    return elevenVoiceOptions.some((option) => option.value === stored) ? stored : defaultElevenVoiceId;
+  });
   const [isPreparingSpeech, setIsPreparingSpeech] = useState(false);
   const [speechProvider, setSpeechProvider] = useState("");
   const [preparedSpeechKey, setPreparedSpeechKey] = useState("");
@@ -102,6 +114,7 @@ export function useMcSession() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const lipPeakRef = useRef(0.08);
+  const playingAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     if (robotState !== "speaking") {
@@ -140,13 +153,26 @@ export function useMcSession() {
       return;
     }
 
+    // 자막은 실제 오디오 재생 위치(currentTime/duration)를 따라간다.
+    // 말이 끝나기 전에 자막이 먼저 지나가지 않도록 문장 글자 수 비중으로 매핑한다.
+    const text = plainMcCopy(approvedAnswer);
     setCaptionCueIndex(0);
+    let elapsedMs = 0;
+    const tickMs = 200;
     const id = window.setInterval(() => {
-      setCaptionCueIndex((index) => index + 1);
-    }, captionCueIntervalMs);
+      const audio = playingAudioRef.current;
+      if (audio && Number.isFinite(audio.duration) && audio.duration > 0) {
+        setCaptionCueIndex(captionCueIndexForProgress(text, audio.currentTime / audio.duration));
+        return;
+      }
+
+      // 오디오 정보를 못 얻는 환경(테스트·오류)에서는 기존 시간 기반으로 진행
+      elapsedMs += tickMs;
+      setCaptionCueIndex(Math.floor(elapsedMs / captionCueIntervalMs));
+    }, tickMs);
 
     return () => window.clearInterval(id);
-  }, [robotState]);
+  }, [robotState, approvedAnswer]);
 
   const currentQuestionText = selectedQuestion?.text || manualQuestion;
 
@@ -178,6 +204,10 @@ export function useMcSession() {
       return speechRequestRef.current.promise;
     }
 
+    // ElevenLabs 엔진일 때는 requireProvider를 비워 서버 자동 폴백 체인
+    // (ElevenLabs → Gemini → OpenAI)을 허용한다. 한 답변은 요청 1회라
+    // 폴백이 일어나도 답변 중간에 목소리가 섞이지 않는다.
+    // Gemini를 명시 선택한 경우에는 Gemini로 고정한다.
     const segments = [cleanText];
     const promise = Promise.all(
       segments.map(async (segment) => {
@@ -188,7 +218,7 @@ export function useMcSession() {
             text: segment,
             geminiVoice: engine === "gemini" ? voice : undefined,
             elevenVoice: engine === "elevenlabs" ? voice : undefined,
-            requireProvider: engine
+            requireProvider: engine === "gemini" ? "gemini" : undefined
           }),
           signal
         });
@@ -207,10 +237,11 @@ export function useMcSession() {
     ).then((segments) => {
       const providers = segments.map((segment) => segment.provider).filter(Boolean);
       const provider = providers.every((provider) => provider === providers[0]) ? providers[0] || "" : "mixed";
-      if (provider !== engine) {
+      const providerAllowed = engine === "gemini" ? provider === "gemini" : provider !== "mixed" && provider !== "";
+      if (!providerAllowed) {
         segments.forEach((segment) => URL.revokeObjectURL(segment.url));
         throw new Error(
-          `${engineLabels[engine]} 음성만 사용해야 합니다. 음성이 섞이지 않도록 재생을 중단했습니다.`
+          `${engineLabels[engine]} 음성 준비에 실패했습니다. 음성이 섞이지 않도록 재생을 중단했습니다.`
         );
       }
 
@@ -423,14 +454,17 @@ export function useMcSession() {
       await new Promise<void>((resolve, reject) => {
         const audio = new Audio(url);
         attachLipSyncAnalyser(audio);
+        playingAudioRef.current = audio;
         const finish = () => {
           analyserRef.current = null;
+          playingAudioRef.current = null;
           resolve();
         };
         audio.onended = finish;
         audio.onerror = finish;
         audio.play().catch((caught) => {
           analyserRef.current = null;
+          playingAudioRef.current = null;
           reject(caught);
         });
       });

@@ -73,7 +73,8 @@ describe("useMcSession speech preparation", () => {
     );
     const preparedCall = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     const requestBody = JSON.parse(String(preparedCall[1].body));
-    expect(requestBody.requireProvider).toBe("elevenlabs");
+    expect(requestBody.requireProvider).toBeUndefined();
+    expect(requestBody.elevenVoice).toBe("bQlkYuipD5BHEhntA5iz");
 
     await act(async () => {
       await result.current.speak();
@@ -157,7 +158,7 @@ describe("useMcSession speech preparation", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const firstCall = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(JSON.parse(String(firstCall[1].body)).text).toBe("첫 문장입니다. 두 번째 문장입니다.");
-    expect(JSON.parse(String(firstCall[1].body)).requireProvider).toBe("elevenlabs");
+    expect(JSON.parse(String(firstCall[1].body)).requireProvider).toBeUndefined();
   });
 
   it("does not play audio when the engine-required request fails", async () => {

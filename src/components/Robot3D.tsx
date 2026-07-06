@@ -10,7 +10,12 @@ const MODEL_URL = "/models/robot-animated.glb";
 
 // Tripo animate_retarget 클립 순서: idle, walk, jump, turn
 const CLIP_IDLE = "NlaTrack";
+const CLIP_WALK = "NlaTrack.001";
 const CLIP_JUMP = "NlaTrack.002";
+
+// 말하는 동안 walk 클립의 팔 스윙을 느리게 섞어 "손으로 말하는" 제스처를 만든다
+const GESTURE_WEIGHT = 0.6;
+const GESTURE_TIMESCALE = 0.55;
 
 // 스켈레탈 애니메이션은 팔에만 적용한다. 머리/척추가 클립으로 움직이면
 // 그룹에 고정된 얼굴 스크린 플레인과 어긋나므로, 머리·몸통의 생동감은
@@ -173,7 +178,25 @@ function RobotModel({ state, lipFrame, onEntered }: RobotModelProps) {
     };
   }, [actions]);
 
-  // 말하기 시작 시 그룹 바운스 + jump 클립(상체 모션)을 한 번 재생하고 idle로 복귀
+  // 말하는 동안 walk 클립의 팔 스윙을 겹쳐 손 제스처를 만든다
+  useEffect(() => {
+    if (state !== "speaking") {
+      return;
+    }
+    const gesture = actions[CLIP_WALK];
+    if (!gesture) {
+      return;
+    }
+
+    gesture.reset().fadeIn(0.4).play();
+    gesture.setEffectiveWeight(GESTURE_WEIGHT);
+    gesture.setEffectiveTimeScale(GESTURE_TIMESCALE);
+    return () => {
+      gesture.fadeOut(0.35);
+    };
+  }, [state, actions]);
+
+  // 말하기 시작 시 그룹 바운스 + jump 클립(팔 모션)을 한 번 재생하고 idle로 복귀
   useEffect(() => {
     if (state !== "speaking") {
       return;

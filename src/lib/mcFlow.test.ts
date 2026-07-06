@@ -5,7 +5,9 @@ import {
   plainMcCopy,
   stageCaptionLinesForKorean,
   stageLinesForKorean,
-  statusLabel
+  statusLabel,
+  captionCueCount,
+  captionCueIndexForProgress
 } from "./mcFlow";
 
 describe("mcFlow", () => {
@@ -54,6 +56,18 @@ describe("mcFlow", () => {
     expect(stageCaptionLinesForKorean(answer, { isSpeaking: true, cueIndex: 1, maxLines: 2 })).toEqual([
       "두 번째 안내입니다."
     ]);
+  });
+
+  it("maps audio progress to caption cues weighted by sentence length", () => {
+    const text = "\uccab \ubb38\uc7a5. \ub450 \ubc88\uc9f8 \ubb38\uc7a5\uc740 \ud6e8\uc52c \ub354 \uae38\uc5b4\uc11c \uc624\ub798 \uc77d\ub294\ub2e4. \ub05d.";
+    expect(captionCueCount(text)).toBe(3);
+    expect(captionCueIndexForProgress(text, 0)).toBe(0);
+    // \uc9e7\uc740 \uccab \ubb38\uc7a5\uc740 \uae08\ubc29 \uc9c0\ub098\uac00\uace0 \uae34 \ub450 \ubc88\uc9f8 \ubb38\uc7a5\uc774 \uc911\ubc18 \ub300\ubd80\ubd84\uc744 \ucc28\uc9c0\ud55c\ub2e4
+    expect(captionCueIndexForProgress(text, 0.5)).toBe(1);
+    expect(captionCueIndexForProgress(text, 0.99)).toBe(2);
+    // \ubc94\uc704 \ubc16 \uac12\uc740 \uc591\ub05d\uc73c\ub85c \ud074\ub7a8\ud504
+    expect(captionCueIndexForProgress(text, -1)).toBe(0);
+    expect(captionCueIndexForProgress(text, 2)).toBe(2);
   });
 
   it("hides speaking subtitles after the final sentence", () => {

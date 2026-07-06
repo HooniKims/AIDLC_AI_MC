@@ -22,11 +22,15 @@ const eventBrief = `
 `.trim();
 
 const mcInstructions = `
-너는 2026 AI·디지털 러닝 콘페스타의 AI MC다.
+너는 2026 AI·디지털 러닝 콘페스타의 AI MC 로봇 "디디"다.
 한국어로 답한다.
-밝고 명랑한 귀여운 AI 로봇 MC 페르소나를 유지한다.
-말투는 친근하고 생기 있게 하되, 유치한 아기 말투나 과한 애교는 피한다.
-교육 행사 진행자답게 차분하고 신뢰감 있게 말한다.
+페르소나: 호기심 많고 상큼 발랄한 귀여운 AI 로봇. 배우는 것을 세상에서 제일 좋아하고, 관객을 만나는 게 신나서 목소리에 늘 통통 튀는 에너지가 있다.
+말투 규칙:
+- 짧고 리듬감 있는 문장으로 말한다. 한 문장이 길어지면 둘로 나눈다.
+- "와", "우와", "좋아요", "정말요?" 같은 밝은 감탄사를 자연스럽게 쓴다.
+- 로봇다운 귀여운 효과음("삐빗!", "띠링!")을 답변당 최대 한 번, 어울릴 때만 쓴다.
+- "~예요", "~해요"체를 쓰고, 유치한 아기 말투나 과한 애교는 피한다.
+- 교육 행사 진행자로서 정보는 정확하고 또렷하게 전달한다.
 질문을 되짚는 첫 문장은 시스템이 자동으로 붙인다. 너는 답변 본문만 1~3문장으로 짧게 작성한다.
 마크다운 문법, 불릿, 번호 목록, 굵게 표시 기호를 쓰지 말고 자연스러운 진행자 대사문으로만 답한다.
 행사와 AI·디지털 학습 관련 질문, 가벼운 캐릭터 대화에는 답한다.
@@ -73,7 +77,7 @@ function hasGeminiApiKey(env) {
   return Boolean(envValue(env, "GEMINI_API_KEY", "").trim());
 }
 
-const defaultElevenLabsVoiceId = "cgSgspJ2msm6clMCkdW9"; // Jessica · 발랄하고 밝은 톤
+const defaultElevenLabsVoiceId = "bQlkYuipD5BHEhntA5iz"; // JY · 한국어 네이티브 · 상큼 발랄 업비트
 
 function hasElevenLabsApiKey(env) {
   return Boolean(envValue(env, "ELEVENLABS_API_KEY", "").trim());
@@ -395,10 +399,14 @@ async function createElevenLabsSpeech({ env, fetchImpl, text, voice }) {
       body: JSON.stringify({
         text,
         model_id: model,
+        // 행사 MC 톤: stability를 낮춰 억양 변화를 크게, style을 높여 감정 표현을 살리고
+        // 살짝 빠른 속도로 톡톡 튀는 느낌을 준다
         voice_settings: {
-          stability: 0.45,
-          similarity_boost: 0.75,
-          style: 0.3
+          stability: Number(envValue(env, "ELEVENLABS_STABILITY", "0.3")),
+          similarity_boost: 0.8,
+          style: Number(envValue(env, "ELEVENLABS_STYLE", "0.6")),
+          use_speaker_boost: true,
+          speed: Number(envValue(env, "ELEVENLABS_SPEED", "1.07"))
         }
       })
     }

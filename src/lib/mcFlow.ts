@@ -107,6 +107,35 @@ export function stageCaptionLinesForKorean(text: string, options: StageCaptionOp
   return stageLinesForKorean(text, options.maxChars);
 }
 
+export function captionCueCount(text: string): number {
+  return stageSentenceCuesForKorean(text).length;
+}
+
+// 오디오 재생 진행률(0~1)을 자막 큐 인덱스로 변환한다.
+// 큐는 문장 단위이고 발화 시간은 글자 수에 대략 비례하므로,
+// 문장 글자 수의 누적 비중으로 현재 문장을 찾는다.
+export function captionCueIndexForProgress(text: string, progress: number): number {
+  const cues = stageSentenceCuesForKorean(text);
+  if (cues.length === 0) {
+    return 0;
+  }
+
+  const lengths = cues.map((lines) => Math.max(1, lines.join(" ").length));
+  const total = lengths.reduce((sum, length) => sum + length, 0);
+  const clamped = Math.min(Math.max(progress, 0), 1);
+  const target = clamped * total;
+
+  let cumulative = 0;
+  for (let index = 0; index < lengths.length; index++) {
+    cumulative += lengths[index];
+    if (target < cumulative) {
+      return index;
+    }
+  }
+
+  return cues.length - 1;
+}
+
 export function statusLabel(state: RobotState): string {
   return STATUS_LABELS[state];
 }
