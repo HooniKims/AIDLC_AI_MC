@@ -145,6 +145,21 @@ export function captionCueCount(text: string): number {
   return stageSentenceCuesForKorean(text).length;
 }
 
+// TTS 응답의 X-AI-MC-Caption-Times 헤더를 파싱한다.
+// 주의: "".split(",")은 [""]이고 Number("")은 0이므로, 빈 헤더(Gemini 등)가
+// [0]이라는 가짜 타임스탬프가 되어 자막을 첫 문장에 가둬버린다. 빈 값은 null.
+export function parseCaptionTimesHeader(header: string | null): number[] | null {
+  if (!header || !header.trim()) {
+    return null;
+  }
+
+  const times = header
+    .split(",")
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  return times.length > 0 ? times : null;
+}
+
 // 문장별 발화 종료 시각(초) 목록으로 현재 자막 큐를 찾는다 (타임스탬프 방식).
 // currentTime이 times[k]를 지나기 전까지 k번째 문장을 보여준다.
 export function captionCueIndexForTimes(times: number[], currentTime: number): number {

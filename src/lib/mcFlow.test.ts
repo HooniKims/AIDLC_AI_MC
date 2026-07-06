@@ -8,7 +8,8 @@ import {
   statusLabel,
   captionCueCount,
   captionCueIndexForProgress,
-  captionCueIndexForTimes
+  captionCueIndexForTimes,
+  parseCaptionTimesHeader
 } from "./mcFlow";
 
 describe("mcFlow", () => {
@@ -57,6 +58,16 @@ describe("mcFlow", () => {
     expect(stageCaptionLinesForKorean(answer, { isSpeaking: true, cueIndex: 1, maxLines: 2 })).toEqual([
       "두 번째 안내입니다."
     ]);
+  });
+
+  it("treats empty or bogus caption-times headers as absent", () => {
+    // Gemini 응답에는 헤더가 없다 — 빈 문자열이 [0]으로 파싱되면 자막이 첫 문장에 갇힌다
+    expect(parseCaptionTimesHeader(null)).toBeNull();
+    expect(parseCaptionTimesHeader("")).toBeNull();
+    expect(parseCaptionTimesHeader("  ")).toBeNull();
+    expect(parseCaptionTimesHeader("0")).toBeNull();
+    expect(parseCaptionTimesHeader("abc")).toBeNull();
+    expect(parseCaptionTimesHeader("0.76,2.68,3.44")).toEqual([0.76, 2.68, 3.44]);
   });
 
   it("maps playback time to caption cues using sentence end timestamps", () => {

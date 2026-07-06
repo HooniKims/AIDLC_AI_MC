@@ -5,6 +5,7 @@ import {
   captionCueIndexForProgress,
   captionCueIndexForTimes,
   nextLipFrame,
+  parseCaptionTimesHeader,
   plainMcCopy
 } from "../lib/mcFlow";
 import { speakingFaceCount } from "../lib/robotFaces";
@@ -181,6 +182,19 @@ export function useMcSession() {
     const tickMs = 120;
     const id = window.setInterval(() => {
       const audio = playingAudioRef.current;
+      if (import.meta.env.DEV) {
+        (window as unknown as Record<string, unknown>).__captionDebug = {
+          hasAudio: Boolean(audio),
+          currentTime: audio?.currentTime,
+          duration: audio?.duration,
+          captionTimes: speechAssetRef.current?.captionTimes,
+          audioSeen,
+          computed: audio && Number.isFinite(audio.duration) && audio.duration > 0
+            ? captionCueIndexForProgress(text, audio.currentTime / audio.duration)
+            : null,
+          text: text.slice(0, 30)
+        };
+      }
       if (audio) {
         audioSeen = true;
         const captionTimes = speechAssetRef.current?.captionTimes;
@@ -266,15 +280,10 @@ export function useMcSession() {
         }
 
         const blob = await response.blob();
-        const captionTimesHeader = response.headers.get("X-AI-MC-Caption-Times") || "";
-        const captionTimes = captionTimesHeader
-          .split(",")
-          .map((value) => Number(value))
-          .filter((value) => Number.isFinite(value) && value >= 0);
         return {
           url: URL.createObjectURL(blob),
           provider: response.headers.get("X-AI-MC-TTS-Provider") || "",
-          captionTimes: captionTimes.length > 0 ? captionTimes : null
+          captionTimes: parseCaptionTimesHeader(response.headers.get("X-AI-MC-Caption-Times"))
         };
       })
     ).then((segments) => {
