@@ -47,6 +47,8 @@ function DemoScreen() {
           isPreparingSpeech={session.isPreparingSpeech}
           isSpeechReady={session.isSpeechReady}
           geminiVoice={session.geminiVoice}
+          ttsEngine={session.ttsEngine}
+          elevenVoice={session.elevenVoice}
           speechProvider={session.speechProvider}
           onSelectQuestion={session.selectQuestion}
           onManualQuestionChange={session.setManualQuestion}
@@ -55,6 +57,8 @@ function DemoScreen() {
           onDraftAnswerChange={session.setDraftAnswer}
           onApproveDraft={session.approveDraft}
           onGeminiVoiceChange={session.setGeminiVoice}
+          onTtsEngineChange={session.setTtsEngine}
+          onElevenVoiceChange={session.setElevenVoice}
           onSpeak={session.speak}
         />
       </section>
@@ -107,6 +111,8 @@ function OperatorScreen() {
           isPreparingSpeech={session.isPreparingSpeech}
           isSpeechReady={session.isSpeechReady}
           geminiVoice={session.geminiVoice}
+          ttsEngine={session.ttsEngine}
+          elevenVoice={session.elevenVoice}
           speechProvider={session.speechProvider}
           onSelectQuestion={session.selectQuestion}
           onManualQuestionChange={session.setManualQuestion}
@@ -115,6 +121,8 @@ function OperatorScreen() {
           onDraftAnswerChange={session.setDraftAnswer}
           onApproveDraft={session.approveDraft}
           onGeminiVoiceChange={session.setGeminiVoice}
+          onTtsEngineChange={session.setTtsEngine}
+          onElevenVoiceChange={session.setElevenVoice}
           onSpeak={session.speak}
         />
       </div>

@@ -1,6 +1,10 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import App from "./App";
+
+vi.mock("./components/Robot3D", () => ({
+  Robot3D: () => <div className="robot-canvas" data-robot-3d="true" />
+}));
 
 function renderAt(path: string) {
   window.history.pushState({}, "", path);

@@ -1,16 +1,43 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { sampleQuestions } from "../data/sampleQuestions";
 import { nextLipFrame, plainMcCopy } from "../lib/mcFlow";
+import { speakingFaceCount } from "../lib/robotFaces";
 import type { AudienceQuestion, RobotState } from "../types";
 
 const defaultGreeting =
   "안녕하세요. 저는 디지털 러닝 콘페스타의 AI MC입니다. 여러분의 질문을 골라 담아 무대에서 또렷하게 전해드릴게요.";
 
 const geminiVoiceStorageKey = "ai-mc-gemini-voice";
+const ttsEngineStorageKey = "ai-mc-tts-engine";
+const elevenVoiceStorageKey = "ai-mc-eleven-voice";
+
+export type TtsEngine = "elevenlabs" | "gemini";
+export const defaultTtsEngine: TtsEngine = "elevenlabs";
+export const defaultElevenVoiceId = "cgSgspJ2msm6clMCkdW9"; // Jessica
+
+const engineLabels: Record<TtsEngine, string> = {
+  elevenlabs: "ElevenLabs",
+  gemini: "Gemini"
+};
+
 const speechPrepareDelayMs = 350;
-const captionCueIntervalMs = 1850;
-const speakingFrameCount = 6;
-const speakingFrameIntervalMs = 145;
+const captionCueIntervalMs = 3600;
+const speakingFrameCount = speakingFaceCount;
+const speakingFrameIntervalMs = 120;
+
+// 음량(0~1)을 입모양 사다리 프레임으로 변환: 일자 입 → 작은 O → 타원 → 활짝 D.
+// 인덱스는 robotFaces의 speakingFaceSequence(입 벌어지는 크기 순)를 따른다.
+function lipFrameForLevel(level: number) {
+  if (level < 0.12) return 0; // neutral (다문 일자 입)
+  if (level < 0.42) return 1; // surprised (작은 O)
+  if (level < 0.72) return 2; // smileOpen (타원)
+  return 3; // open (활짝 D)
+}
+
+// 립싱크 피크는 최근 1~2초의 음량을 따라가야 한다. 감쇠가 느리면 도입부의
+// 큰 소리에 피크가 고정되어 이후 입이 계속 다문 판정이 난다 (tick당 8% 감쇠).
+const lipPeakDecay = 0.92;
+const lipSilenceFloor = 0.015;
 
 interface SpeechAsset {
   key: string;
@@ -18,8 +45,8 @@ interface SpeechAsset {
   provider: string;
 }
 
-function speechCacheKey(text: string, voice: string) {
-  return `${voice.trim() || "default"}::${plainMcCopy(text)}`;
+function speechCacheKey(text: string, engine: TtsEngine, voice: string) {
+  return `${engine}:${voice.trim() || "default"}::${plainMcCopy(text)}`;
 }
 
 function readStoredValue(key: string, fallback: string) {
@@ -59,12 +86,22 @@ export function useMcSession() {
   const [lipFrame, setLipFrame] = useState(0);
   const [captionCueIndex, setCaptionCueIndex] = useState(0);
   const [geminiVoice, setGeminiVoiceState] = useState(() => readStoredValue(geminiVoiceStorageKey, "Leda"));
+  const [ttsEngine, setTtsEngineState] = useState<TtsEngine>(() => {
+    const stored = readStoredValue(ttsEngineStorageKey, defaultTtsEngine);
+    return stored === "gemini" ? "gemini" : "elevenlabs";
+  });
+  const [elevenVoice, setElevenVoiceState] = useState(() =>
+    readStoredValue(elevenVoiceStorageKey, defaultElevenVoiceId)
+  );
   const [isPreparingSpeech, setIsPreparingSpeech] = useState(false);
   const [speechProvider, setSpeechProvider] = useState("");
   const [preparedSpeechKey, setPreparedSpeechKey] = useState("");
   const [speechPreparationVersion, setSpeechPreparationVersion] = useState(0);
   const speechAssetRef = useRef<SpeechAsset | null>(null);
   const speechRequestRef = useRef<{ key: string; promise: Promise<SpeechAsset> } | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const lipPeakRef = useRef(0.08);
 
   useEffect(() => {
     if (robotState !== "speaking") {
@@ -73,6 +110,24 @@ export function useMcSession() {
     }
 
     const id = window.setInterval(() => {
+      const analyser = analyserRef.current;
+      if (analyser) {
+        // 실제 재생 중인 음성의 음량을 측정해 입모양을 오디오에 맞춘다
+        const samples = new Uint8Array(analyser.fftSize);
+        analyser.getByteTimeDomainData(samples);
+        let sum = 0;
+        for (let i = 0; i < samples.length; i++) {
+          const value = (samples[i] - 128) / 128;
+          sum += value * value;
+        }
+        const rms = Math.sqrt(sum / samples.length);
+        lipPeakRef.current = Math.max(lipPeakRef.current * lipPeakDecay, rms, 0.04);
+        const level = rms < lipSilenceFloor ? 0 : rms / lipPeakRef.current;
+        setLipFrame(lipFrameForLevel(level));
+        return;
+      }
+
+      // 분석기를 못 쓰는 환경에서는 기존처럼 입모양을 순환시킨다
       setLipFrame((frame) => nextLipFrame(frame, speakingFrameCount));
     }, speakingFrameIntervalMs);
 
@@ -110,9 +165,9 @@ export function useMcSession() {
     setPreparedSpeechKey(asset.key);
   }
 
-  async function requestSpeechAsset(text: string, voice: string, signal?: AbortSignal) {
+  async function requestSpeechAsset(text: string, engine: TtsEngine, voice: string, signal?: AbortSignal) {
     const cleanText = plainMcCopy(text);
-    const key = speechCacheKey(cleanText, voice);
+    const key = speechCacheKey(cleanText, engine, voice);
     const existing = speechAssetRef.current;
 
     if (existing?.key === key) {
@@ -131,8 +186,9 @@ export function useMcSession() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             text: segment,
-            geminiVoice: voice,
-            requireProvider: "gemini"
+            geminiVoice: engine === "gemini" ? voice : undefined,
+            elevenVoice: engine === "elevenlabs" ? voice : undefined,
+            requireProvider: engine
           }),
           signal
         });
@@ -151,9 +207,11 @@ export function useMcSession() {
     ).then((segments) => {
       const providers = segments.map((segment) => segment.provider).filter(Boolean);
       const provider = providers.every((provider) => provider === providers[0]) ? providers[0] || "" : "mixed";
-      if (provider !== "gemini") {
+      if (provider !== engine) {
         segments.forEach((segment) => URL.revokeObjectURL(segment.url));
-        throw new Error("Gemini 음성만 사용해야 합니다. 음성이 섞이지 않도록 재생을 중단했습니다.");
+        throw new Error(
+          `${engineLabels[engine]} 음성만 사용해야 합니다. 음성이 섞이지 않도록 재생을 중단했습니다.`
+        );
       }
 
       const asset = {
@@ -189,7 +247,8 @@ export function useMcSession() {
       return;
     }
 
-    const key = speechCacheKey(text, geminiVoice);
+    const activeVoice = ttsEngine === "elevenlabs" ? elevenVoice : geminiVoice;
+    const key = speechCacheKey(text, ttsEngine, activeVoice);
     if (speechAssetRef.current?.key === key) {
       setIsPreparingSpeech(false);
       return;
@@ -198,7 +257,7 @@ export function useMcSession() {
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => {
       setIsPreparingSpeech(true);
-      requestSpeechAsset(text, geminiVoice, controller.signal)
+      requestSpeechAsset(text, ttsEngine, activeVoice, controller.signal)
         .catch((caught) => {
           if (!(caught instanceof DOMException && caught.name === "AbortError")) {
             setSpeechProvider("");
@@ -215,7 +274,7 @@ export function useMcSession() {
       window.clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [approvedAnswer, geminiVoice, speechPreparationVersion]);
+  }, [approvedAnswer, geminiVoice, elevenVoice, ttsEngine, speechPreparationVersion]);
 
   useEffect(() => {
     return () => {
@@ -231,10 +290,23 @@ export function useMcSession() {
     setError("");
   }
 
+  function setTtsEngine(value: TtsEngine) {
+    setTtsEngineState(value);
+    writeStoredValue(ttsEngineStorageKey, value);
+    setError("");
+  }
+
+  function setElevenVoice(value: string) {
+    setElevenVoiceState(value);
+    writeStoredValue(elevenVoiceStorageKey, value);
+    setError("");
+  }
+
   function selectQuestion(question: AudienceQuestion) {
     setSelectedQuestion(question);
     setManualQuestion("");
     setDraftAnswer("");
+    setApprovedAnswer("");
     setError("");
     setRobotState("listening");
   }
@@ -277,7 +349,12 @@ export function useMcSession() {
         throw new Error(payload.error || "답변 생성에 실패했습니다.");
       }
 
-      setDraftAnswer(plainMcCopy(payload.answer || ""));
+      const answer = plainMcCopy(payload.answer || "");
+      setDraftAnswer(answer);
+      if (answer) {
+        setApprovedAnswer(answer);
+        setSpeechPreparationVersion((version) => version + 1);
+      }
       setRobotState("listening");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "답변 생성에 실패했습니다.");
@@ -303,13 +380,59 @@ export function useMcSession() {
     setRobotState("idle");
   }
 
+  // 재생 오디오에 WebAudio 분석기를 연결해 립싱크가 실제 음량을 따라가게 한다.
+  // 컨텍스트가 running 상태일 때만 오디오를 재라우팅해, 실패 시에도 소리는 그대로 나온다.
+  function attachLipSyncAnalyser(audio: HTMLAudioElement) {
+    try {
+      if (typeof window === "undefined" || !("AudioContext" in window)) {
+        return;
+      }
+      const context = audioContextRef.current ?? new AudioContext();
+      audioContextRef.current = context;
+
+      const connect = () => {
+        try {
+          const source = context.createMediaElementSource(audio);
+          const analyser = context.createAnalyser();
+          analyser.fftSize = 512;
+          source.connect(analyser);
+          analyser.connect(context.destination);
+          analyserRef.current = analyser;
+        } catch {
+          analyserRef.current = null;
+        }
+      };
+
+      if (context.state === "running") {
+        connect();
+      } else {
+        context
+          .resume()
+          .then(connect)
+          .catch(() => {
+            analyserRef.current = null;
+          });
+      }
+    } catch {
+      analyserRef.current = null;
+    }
+  }
+
   async function playSpeechAsset(asset: SpeechAsset) {
     for (const url of asset.urls) {
       await new Promise<void>((resolve, reject) => {
         const audio = new Audio(url);
-        audio.onended = () => resolve();
-        audio.onerror = () => resolve();
-        audio.play().catch(reject);
+        attachLipSyncAnalyser(audio);
+        const finish = () => {
+          analyserRef.current = null;
+          resolve();
+        };
+        audio.onended = finish;
+        audio.onerror = finish;
+        audio.play().catch((caught) => {
+          analyserRef.current = null;
+          reject(caught);
+        });
       });
     }
   }
@@ -325,7 +448,8 @@ export function useMcSession() {
     setError("");
 
     try {
-      const asset = await requestSpeechAsset(text, geminiVoice);
+      const activeVoice = ttsEngine === "elevenlabs" ? elevenVoice : geminiVoice;
+      const asset = await requestSpeechAsset(text, ttsEngine, activeVoice);
       await playSpeechAsset(asset);
       finishSpeaking();
     } catch (caught) {
@@ -335,7 +459,8 @@ export function useMcSession() {
   }
 
   const draftSpeechText = plainMcCopy(draftAnswer);
-  const draftSpeechKey = draftSpeechText ? speechCacheKey(draftSpeechText, geminiVoice) : "";
+  const activeSpeechVoice = ttsEngine === "elevenlabs" ? elevenVoice : geminiVoice;
+  const draftSpeechKey = draftSpeechText ? speechCacheKey(draftSpeechText, ttsEngine, activeSpeechVoice) : "";
   const isSpeechReady = Boolean(draftSpeechKey && preparedSpeechKey === draftSpeechKey);
 
   return useMemo(
@@ -354,6 +479,8 @@ export function useMcSession() {
       lipFrame,
       captionCueIndex,
       geminiVoice,
+      ttsEngine,
+      elevenVoice,
       speechProvider,
       currentQuestionText,
       selectQuestion,
@@ -363,6 +490,8 @@ export function useMcSession() {
       setDraftAnswer,
       approveDraft,
       setGeminiVoice,
+      setTtsEngine,
+      setElevenVoice,
       speak
     }),
     [
@@ -380,6 +509,8 @@ export function useMcSession() {
       lipFrame,
       captionCueIndex,
       geminiVoice,
+      ttsEngine,
+      elevenVoice,
       speechProvider,
       currentQuestionText
     ]

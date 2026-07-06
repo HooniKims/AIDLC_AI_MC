@@ -73,6 +73,20 @@ function hasGeminiApiKey(env) {
   return Boolean(envValue(env, "GEMINI_API_KEY", "").trim());
 }
 
+const defaultElevenLabsVoiceId = "cgSgspJ2msm6clMCkdW9"; // Jessica · 발랄하고 밝은 톤
+
+function hasElevenLabsApiKey(env) {
+  return Boolean(envValue(env, "ELEVENLABS_API_KEY", "").trim());
+}
+
+function elevenLabsVoiceId(env, requested) {
+  return (
+    String(requested || "").trim() ||
+    envValue(env, "ELEVENLABS_VOICE_ID", "").trim() ||
+    defaultElevenLabsVoiceId
+  );
+}
+
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -367,6 +381,40 @@ async function createGeminiSpeechWithRetry({ env, fetchImpl, text, voice, retryD
   throw lastError;
 }
 
+async function createElevenLabsSpeech({ env, fetchImpl, text, voice }) {
+  const voiceId = elevenLabsVoiceId(env, voice);
+  const model = envValue(env, "ELEVENLABS_TTS_MODEL", "eleven_multilingual_v2");
+  const response = await fetchImpl(
+    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
+    {
+      method: "POST",
+      headers: {
+        "xi-api-key": envValue(env, "ELEVENLABS_API_KEY", ""),
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        text,
+        model_id: model,
+        voice_settings: {
+          stability: 0.45,
+          similarity_boost: 0.75,
+          style: 0.3
+        }
+      })
+    }
+  );
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    const detail = payload?.detail;
+    const message =
+      (typeof detail === "string" ? detail : detail?.message) || "ElevenLabs TTS 호출에 실패했습니다.";
+    throw new Error(message);
+  }
+
+  return { buffer: Buffer.from(await response.arrayBuffer()), voiceId };
+}
+
 function getOpenAIClient(openai, env) {
   if (openai) {
     return openai;
@@ -467,6 +515,13 @@ export function createApp(options = {}) {
       return;
     }
 
+    if (requiredProvider === "elevenlabs" && !hasElevenLabsApiKey(env)) {
+      response.status(503).json({
+        error: "ElevenLabs 음성 고정 모드입니다. ELEVENLABS_API_KEY가 필요합니다."
+      });
+      return;
+    }
+
     if (requiredProvider === "gemini" && !hasGeminiApiKey(env)) {
       response.status(503).json({
         error: "Gemini 음성 고정 모드입니다. GEMINI_API_KEY가 필요합니다."
@@ -474,9 +529,10 @@ export function createApp(options = {}) {
       return;
     }
 
-    if (!hasGeminiApiKey(env) && !hasApiKey(env)) {
+    if (!hasElevenLabsApiKey(env) && !hasGeminiApiKey(env) && !hasApiKey(env)) {
       response.status(503).json({
-        error: "GEMINI_API_KEY 또는 OPENAI_API_KEY가 필요합니다. 프로젝트 폴더의 .env 파일에 키를 입력해 주세요."
+        error:
+          "ELEVENLABS_API_KEY, GEMINI_API_KEY 또는 OPENAI_API_KEY가 필요합니다. 프로젝트 폴더의 .env 파일에 키를 입력해 주세요."
       });
       return;
     }
@@ -485,7 +541,31 @@ export function createApp(options = {}) {
       const geminiVoice = String(request.body?.geminiVoice || "").trim() || envValue(env, "GEMINI_TTS_VOICE", "Leda");
       let geminiFallback = false;
 
-      if (hasGeminiApiKey(env)) {
+      if (hasElevenLabsApiKey(env) && (requiredProvider === "elevenlabs" || !requiredProvider)) {
+        try {
+          const { buffer, voiceId } = await createElevenLabsSpeech({
+            env,
+            fetchImpl,
+            text,
+            voice: request.body?.elevenVoice
+          });
+
+          response.setHeader("Content-Type", "audio/mpeg");
+          response.setHeader("X-AI-MC-TTS-Provider", "elevenlabs");
+          response.setHeader("X-AI-MC-TTS-Voice", voiceId);
+          response.send(buffer);
+          return;
+        } catch (elevenError) {
+          if (requiredProvider === "elevenlabs") {
+            response.status(502).json({
+              error: `ElevenLabs 음성 생성에 실패했습니다. ${elevenError?.message || "잠시 후 다시 시도해 주세요."}`
+            });
+            return;
+          }
+        }
+      }
+
+      if (hasGeminiApiKey(env) && requiredProvider !== "elevenlabs") {
         try {
           const buffer = await createGeminiSpeechWithRetry({
             env,

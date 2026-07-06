@@ -1,4 +1,5 @@
 import type { AudienceQuestion, RobotState } from "../types";
+import type { TtsEngine } from "../hooks/useMcSession";
 import { canGenerateAnswer } from "../lib/mcFlow";
 import { StatusBadge } from "./StatusBadge";
 
@@ -8,6 +9,18 @@ const geminiVoiceOptions = [
   { value: "Zephyr", label: "Zephyr · 밝음" },
   { value: "Achird", label: "Achird · 친근함" },
   { value: "Laomedeia", label: "Laomedeia · 업비트" }
+];
+
+const elevenVoiceOptions = [
+  { value: "cgSgspJ2msm6clMCkdW9", label: "Jessica · 발랄하고 밝음" },
+  { value: "FGY2WhTYpPnrIDTdsKH5", label: "Laura · 햇살 같은 활기" },
+  { value: "hpp4J3VqNfWAUOO0d1Us", label: "Bella · 프로페셔널 · 따뜻함" },
+  { value: "EXAVITQu4vr4xnSDxMaL", label: "Sarah · 차분한 신뢰감" }
+];
+
+const engineOptions: { value: TtsEngine; label: string }[] = [
+  { value: "elevenlabs", label: "ElevenLabs (기본)" },
+  { value: "gemini", label: "Gemini" }
 ];
 
 interface OperatorPanelProps {
@@ -23,6 +36,8 @@ interface OperatorPanelProps {
   isPreparingSpeech: boolean;
   isSpeechReady: boolean;
   geminiVoice: string;
+  ttsEngine: TtsEngine;
+  elevenVoice: string;
   speechProvider: string;
   onSelectQuestion: (question: AudienceQuestion) => void;
   onManualQuestionChange: (value: string) => void;
@@ -31,6 +46,8 @@ interface OperatorPanelProps {
   onDraftAnswerChange: (value: string) => void;
   onApproveDraft: () => void;
   onGeminiVoiceChange: (value: string) => void;
+  onTtsEngineChange: (value: TtsEngine) => void;
+  onElevenVoiceChange: (value: string) => void;
   onSpeak: () => void;
 }
 
@@ -47,6 +64,8 @@ export function OperatorPanel({
   isPreparingSpeech,
   isSpeechReady,
   geminiVoice,
+  ttsEngine,
+  elevenVoice,
   speechProvider,
   onSelectQuestion,
   onManualQuestionChange,
@@ -55,6 +74,8 @@ export function OperatorPanel({
   onDraftAnswerChange,
   onApproveDraft,
   onGeminiVoiceChange,
+  onTtsEngineChange,
+  onElevenVoiceChange,
   onSpeak
 }: OperatorPanelProps) {
   const selectedText = selectedQuestion?.text || manualQuestion;
@@ -62,13 +83,15 @@ export function OperatorPanel({
   const canApprove = draftAnswer.trim().length > 0;
   const canSpeak = approvedAnswer.trim().length > 0 && !isSpeaking;
   const speechStatus =
-    isSpeechReady && speechProvider === "gemini"
-      ? "Gemini 음색 준비 완료"
-      : isSpeechReady && speechProvider === "openai"
-        ? "OpenAI 폴백 음성 준비 완료"
-        : isPreparingSpeech
-          ? "선택한 음색으로 미리 생성 중"
-          : "답변을 만들면 자동으로 미리 준비";
+    isSpeechReady && speechProvider === "elevenlabs"
+      ? "ElevenLabs 음색 준비 완료"
+      : isSpeechReady && speechProvider === "gemini"
+        ? "Gemini 음색 준비 완료"
+        : isSpeechReady && speechProvider === "openai"
+          ? "OpenAI 폴백 음성 준비 완료"
+          : isPreparingSpeech
+            ? "선택한 음색으로 미리 생성 중"
+            : "답변을 만들면 자동으로 미리 준비";
 
   return (
     <aside className="operator-panel" aria-label="운영자 콘솔">
@@ -83,26 +106,57 @@ export function OperatorPanel({
       <section className="control-section voice-section">
         <div className="section-heading">
           <h3>목소리</h3>
-          <span>Gemini 메인</span>
-        </div>
-        <div className="voice-engine-card">
-          <strong>Gemini 2.5 Flash TTS</strong>
-          <span>한 답변 안에서는 Gemini 음색으로 끝까지 고정</span>
+          <span>{ttsEngine === "elevenlabs" ? "ElevenLabs 메인" : "Gemini 메인"}</span>
         </div>
         <label className="gemini-voice-select">
-          <span>Gemini 음색</span>
+          <span>음성 엔진</span>
           <select
-            value={geminiVoice}
-            onChange={(event) => onGeminiVoiceChange(event.target.value)}
-            aria-label="Gemini 음색"
+            value={ttsEngine}
+            onChange={(event) => onTtsEngineChange(event.target.value as TtsEngine)}
+            aria-label="음성 엔진"
           >
-            {geminiVoiceOptions.map((option) => (
+            {engineOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
             ))}
           </select>
         </label>
+        <div className="voice-engine-card">
+          <strong>{ttsEngine === "elevenlabs" ? "ElevenLabs Multilingual v2" : "Gemini 2.5 Flash TTS"}</strong>
+          <span>한 답변 안에서는 같은 음색으로 끝까지 고정</span>
+        </div>
+        {ttsEngine === "elevenlabs" ? (
+          <label className="gemini-voice-select">
+            <span>ElevenLabs 음색</span>
+            <select
+              value={elevenVoice}
+              onChange={(event) => onElevenVoiceChange(event.target.value)}
+              aria-label="ElevenLabs 음색"
+            >
+              {elevenVoiceOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <label className="gemini-voice-select">
+            <span>Gemini 음색</span>
+            <select
+              value={geminiVoice}
+              onChange={(event) => onGeminiVoiceChange(event.target.value)}
+              aria-label="Gemini 음색"
+            >
+              {geminiVoiceOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <p className="voice-status" aria-live="polite">
           {speechStatus}
         </p>

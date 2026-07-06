@@ -1,6 +1,13 @@
 import { render } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { RobotState } from "../types";
 import { RobotStage } from "./RobotStage";
+
+vi.mock("./Robot3D", () => ({
+  Robot3D: ({ state, lipFrame }: { state: RobotState; lipFrame?: number }) => (
+    <div className="robot-canvas" data-robot-3d="true" data-state={state} data-lip-frame={lipFrame} />
+  )
+}));
 
 describe("RobotStage captions", () => {
   it("shows one sentence instead of the full answer while speaking", () => {
@@ -57,38 +64,38 @@ describe("RobotStage captions", () => {
   });
 });
 
-describe("RobotStage character frames", () => {
-  it("keeps the full-body image stable while changing only the mouth shape", () => {
+describe("RobotStage 3D robot", () => {
+  it("renders the 3D robot and maps lip frames to screen face cuts", () => {
     const { container, rerender } = render(
       <RobotStage state="speaking" answer="안내를 시작할게요." lipFrame={0} captionCueIndex={0} />
     );
 
-    const firstImage = container.querySelector<HTMLImageElement>(".robot-image");
-    const firstSrc = firstImage?.src;
-    const firstMouth = container.querySelector<HTMLElement>(".robot-mouth");
-    expect(firstImage?.dataset.frameTotal).toBe("6");
-    expect(firstImage?.dataset.frameIndex).toBe("0");
-    expect(firstImage?.dataset.frameKey).toBe("pose_point");
-    expect(firstImage?.src).toContain("preview-frames");
-    expect(firstMouth?.dataset.mouthShape).toBe("closed");
+    const wrap = container.querySelector<HTMLElement>(".robot-wrap");
+    expect(container.querySelector("[data-robot-3d='true']")).not.toBeNull();
+    expect(wrap?.dataset.faceKey).toBe("neutral");
+
+    rerender(<RobotStage state="speaking" answer="안내를 시작할게요." lipFrame={1} captionCueIndex={0} />);
+    expect(container.querySelector<HTMLElement>(".robot-wrap")?.dataset.faceKey).toBe("surprised");
+
+    rerender(<RobotStage state="speaking" answer="안내를 시작할게요." lipFrame={2} captionCueIndex={0} />);
+    expect(container.querySelector<HTMLElement>(".robot-wrap")?.dataset.faceKey).toBe("smileOpen");
 
     rerender(<RobotStage state="speaking" answer="안내를 시작할게요." lipFrame={3} captionCueIndex={0} />);
-
-    const laterImage = container.querySelector<HTMLImageElement>(".robot-image");
-    const laterMouth = container.querySelector<HTMLElement>(".robot-mouth");
-    expect(laterImage?.src).toBe(firstSrc);
-    expect(laterImage?.dataset.frameIndex).toBe("3");
-    expect(laterImage?.dataset.frameKey).toBe("pose_point");
-    expect(laterMouth?.dataset.mouthShape).toBe("wide");
+    expect(container.querySelector<HTMLElement>(".robot-wrap")?.dataset.faceKey).toBe("open");
   });
 
-  it("does not layer a separate face image over the full-body frame", () => {
+  it("does not render legacy 2D frame image or CSS mouth overlay", () => {
     const { container } = render(
       <RobotStage state="speaking" answer="안내를 시작할게요." lipFrame={5} captionCueIndex={0} />
     );
 
-    expect(container.querySelectorAll(".robot-image")).toHaveLength(1);
-    expect(container.querySelector(".robot-face-frame")).toBeNull();
-    expect(container.querySelector(".robot-mouth")).not.toBeNull();
+    expect(container.querySelector(".robot-image")).toBeNull();
+    expect(container.querySelector(".robot-mouth")).toBeNull();
+    expect(container.querySelectorAll(".robot-canvas")).toHaveLength(1);
+  });
+
+  it("keeps a smiling face while idle", () => {
+    const { container } = render(<RobotStage state="idle" lipFrame={0} />);
+    expect(container.querySelector<HTMLElement>(".robot-wrap")?.dataset.faceKey).toBe("open");
   });
 });

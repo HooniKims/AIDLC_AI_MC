@@ -37,7 +37,7 @@ describe("useMcSession speech preparation", () => {
         status: 200,
         headers: {
           "Content-Type": "audio/wav",
-          "X-AI-MC-TTS-Provider": "gemini"
+          "X-AI-MC-TTS-Provider": "elevenlabs"
         }
       });
     });
@@ -73,7 +73,7 @@ describe("useMcSession speech preparation", () => {
     );
     const preparedCall = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     const requestBody = JSON.parse(String(preparedCall[1].body));
-    expect(requestBody.requireProvider).toBe("gemini");
+    expect(requestBody.requireProvider).toBe("elevenlabs");
 
     await act(async () => {
       await result.current.speak();
@@ -83,13 +83,58 @@ describe("useMcSession speech preparation", () => {
     expect(MockAudio.instances[0]?.src).toBe("blob:prepared-speech");
   });
 
-  it("prepares a full answer in one Gemini request to keep the voice stable", async () => {
+  it("speaks the generated answer right away instead of the default greeting", async () => {
+    const ttsBodies: string[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/generate-answer") {
+        return new Response(JSON.stringify({ answer: "생성된 답변입니다." }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      ttsBodies.push(String(init?.body));
+      return new Response(new Blob(["audio"], { type: "audio/wav" }), {
+        status: 200,
+        headers: {
+          "Content-Type": "audio/wav",
+          "X-AI-MC-TTS-Provider": "elevenlabs"
+        }
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { result } = renderHook(() => useMcSession());
+
+    await act(async () => {
+      await result.current.generateAnswer();
+    });
+
+    expect(result.current.approvedAnswer).toBe("생성된 답변입니다.");
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500);
+    });
+
+    await act(async () => {
+      await result.current.speak();
+    });
+
+    expect(ttsBodies.length).toBeGreaterThan(0);
+    ttsBodies.forEach((body) => {
+      expect(body).toContain("생성된 답변입니다.");
+      expect(body).not.toContain("AI MC입니다");
+    });
+    expect(MockAudio.instances[0]?.src).toBe("blob:prepared-speech");
+  });
+
+  it("prepares a full answer in one request to keep the voice stable", async () => {
     const fetchMock = vi.fn(async () => {
       return new Response(new Blob(["audio"], { type: "audio/wav" }), {
         status: 200,
         headers: {
           "Content-Type": "audio/wav",
-          "X-AI-MC-TTS-Provider": "gemini"
+          "X-AI-MC-TTS-Provider": "elevenlabs"
         }
       });
     });
@@ -112,14 +157,14 @@ describe("useMcSession speech preparation", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const firstCall = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(JSON.parse(String(firstCall[1].body)).text).toBe("첫 문장입니다. 두 번째 문장입니다.");
-    expect(JSON.parse(String(firstCall[1].body)).requireProvider).toBe("gemini");
+    expect(JSON.parse(String(firstCall[1].body)).requireProvider).toBe("elevenlabs");
   });
 
-  it("does not play audio when the Gemini-required request fails", async () => {
+  it("does not play audio when the engine-required request fails", async () => {
     const fetchMock = vi
       .fn()
       .mockImplementation(async () =>
-        new Response(JSON.stringify({ error: "Gemini 음성 생성에 실패했습니다. quota" }), {
+        new Response(JSON.stringify({ error: "ElevenLabs 음성 생성에 실패했습니다. quota" }), {
           status: 502,
           headers: {
             "Content-Type": "application/json"
@@ -151,6 +196,6 @@ describe("useMcSession speech preparation", () => {
     });
 
     expect(MockAudio.instances).toHaveLength(0);
-    expect(result.current.error).toContain("Gemini 음성 생성에 실패했습니다");
+    expect(result.current.error).toContain("ElevenLabs 음성 생성에 실패했습니다");
   });
 });

@@ -4,3 +4,9 @@ dist/
 .DS_Store
 coverage/
 .worktrees/
+.gstack/
+.claude/
+
+# 대용량 3D 원본/중간 산출물 (Tripo 파이프라인으로 재생성 가능, 로컬 보관)
+cute+robot+3d+model.glb
+assets/models/robot-rigged.glb

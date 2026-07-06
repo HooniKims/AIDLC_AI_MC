@@ -1,8 +1,9 @@
 import type { RobotState } from "../types";
 import { StatusBadge } from "./StatusBadge";
 import { ConfestaBackdrop } from "./ConfestaBackdrop";
+import { Robot3D } from "./Robot3D";
 import { stageCaptionLinesForKorean } from "../lib/mcFlow";
-import { mouthShapeForFrame, robotFrameForState } from "../lib/robotFrames";
+import { faceForFrame } from "../lib/robotFaces";
 
 interface RobotStageProps {
   state: RobotState;
@@ -22,8 +23,7 @@ export function RobotStage({
   variant = "preview"
 }: RobotStageProps) {
   const isSpeaking = state === "speaking";
-  const activeFrame = robotFrameForState(state, lipFrame);
-  const mouthShape = mouthShapeForFrame(lipFrame);
+  const faceKey = faceForFrame(state, lipFrame);
   const displayAnswer =
     answer || "안녕하세요. 저는 디지털 러닝 콘페스타의 AI MC입니다. 오늘의 배움 여정을 함께 안내할게요.";
   const answerLines = stageCaptionLinesForKorean(displayAnswer, {
@@ -45,25 +45,13 @@ export function RobotStage({
         <StatusBadge state={state} />
       </div>
 
-      <div className={`robot-wrap robot-wrap--${state}`}>
+      <div
+        className={`robot-wrap robot-wrap--3d robot-wrap--${state}`}
+        data-face-key={faceKey}
+        data-lip-frame={lipFrame}
+      >
         <div className="robot-glow" />
-        <img
-          className="robot-image"
-          src={activeFrame.imageSrc}
-          alt="AI MC 로봇 프레임 캐릭터"
-          draggable="false"
-          data-character-source={activeFrame.source}
-          data-frame-key={activeFrame.frameKey}
-          data-frame-index={activeFrame.frameIndex}
-          data-frame-total={activeFrame.frameCount}
-        />
-        {isSpeaking ? (
-          <span
-            className={`robot-mouth robot-mouth--${mouthShape}`}
-            data-mouth-shape={mouthShape}
-            aria-hidden="true"
-          />
-        ) : null}
+        <Robot3D state={state} lipFrame={lipFrame} />
         {isSpeaking ? <span className="voice-pulse pulse-one" aria-hidden="true" /> : null}
         {isSpeaking ? <span className="voice-pulse pulse-two" aria-hidden="true" /> : null}
       </div>
