@@ -1,14 +1,14 @@
 rules_version = '2';
 
-// AI MC 라이브 Q&A 보안 규칙.
-// 인증 없이 운영하는 현장 이벤트 기준: 읽기는 공개, 질문 생성은 형식을 검증한다.
-// 운영자 액션(승인/답변 저장/재생 제어)은 update로 허용한다.
-// ⚠️ 프로덕션 강화: Firebase App Check 또는 익명 인증 + 운영자 커스텀 클레임 권장.
+// AI MC 라이브 Q&A 보안 규칙 (운영자 인증 기반).
+// - 참가자(비인증): 질문 생성만 가능(형식·길이 검증), control의 sessionId 읽기만 가능
+// - 운영자(이메일/비밀번호 로그인): 질문 읽기·상태 변경, 무대 제어 쓰기
 service cloud.firestore {
   match /databases/{database}/documents {
 
     match /questions/{questionId} {
-      allow read: if true;
+      // 질문 목록(닉네임 포함)은 운영자·무대만 읽는다
+      allow read: if request.auth != null;
 
       // 참가자 제출: 필드 형식과 길이를 검증해 스팸/거대 페이로드 차단
       allow create: if request.resource.data.text is string
@@ -20,14 +20,16 @@ service cloud.firestore {
         && request.resource.data.sessionId is string
         && request.resource.data.status == 'pending';
 
-      // 운영자 액션(상태 전이·답변 저장). 인증 도입 전까지 공개.
-      allow update: if true;
+      // 승인/거절/답변 저장/방송완료 표시는 운영자 전용
+      allow update: if request.auth != null;
       allow delete: if false;
     }
 
     match /control/{docId} {
+      // 참가자 페이지가 현재 sessionId를 읽어야 하므로 읽기는 공개
       allow read: if true;
-      allow write: if true;
+      // 세션 리셋·무대 재생 트리거는 운영자 전용
+      allow write: if request.auth != null;
     }
   }
 }

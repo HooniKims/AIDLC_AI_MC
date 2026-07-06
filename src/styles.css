@@ -1586,3 +1586,47 @@ textarea:focus {
 .stage-screen--live .stage-answer {
   max-width: min(920px, calc(100% - 480px));
 }
+
+/* ===== 운영자 로그인 게이트 ===== */
+.gate-screen {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: radial-gradient(120% 120% at 50% 0%, #4c1d95 0%, #2a0b52 60%, #180633 100%);
+}
+
+.gate-card {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 30px;
+  border-radius: 22px;
+  background: var(--confesta-vanilla);
+  box-shadow: 0 20px 50px rgba(20, 10, 41, 0.4);
+  font-weight: 700;
+  color: var(--confesta-ink);
+}
+
+.gate-card--pending {
+  text-align: center;
+  color: var(--confesta-muted);
+}
+
+.gate-kicker {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--confesta-grape);
+}
+
+.gate-title {
+  margin: 0 0 6px;
+  font-size: 1.45rem;
+  font-weight: 900;
+}

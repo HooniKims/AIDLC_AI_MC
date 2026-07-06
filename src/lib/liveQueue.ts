@@ -66,7 +66,17 @@ function controlRef() {
   return doc(getDb(), CONTROL_DOC);
 }
 
-// 제어 문서(현재 세션·재생 상태)를 없으면 생성한다. 반환은 현재 sessionId.
+// 참가자용: 현재 sessionId를 읽기만 한다 (쓰기 권한 불필요).
+// 운영자가 아직 콘솔을 연 적 없어 제어 문서가 없으면 null.
+export async function readSessionId(): Promise<string | null> {
+  const snapshot = await getDoc(controlRef());
+  if (!snapshot.exists()) {
+    return null;
+  }
+  return String(snapshot.data().sessionId ?? "") || null;
+}
+
+// 운영자·무대용: 제어 문서(현재 세션·재생 상태)를 없으면 생성한다. 반환은 현재 sessionId.
 export async function ensureControl(): Promise<string> {
   const ref = controlRef();
   const snapshot = await getDoc(ref);

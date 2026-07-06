@@ -19,7 +19,7 @@ export function isFirebaseConfigured(): boolean {
 let cachedApp: FirebaseApp | null = null;
 let cachedDb: Firestore | null = null;
 
-export function getDb(): Firestore {
+export function getFirebaseApp(): FirebaseApp {
   if (!isFirebaseConfigured()) {
     throw new Error(
       "Firebase 설정이 없습니다. .env에 VITE_FIREBASE_* 값을 입력해 주세요."
@@ -28,8 +28,12 @@ export function getDb(): Firestore {
   if (!cachedApp) {
     cachedApp = initializeApp(firebaseConfig);
   }
+  return cachedApp;
+}
+
+export function getDb(): Firestore {
   if (!cachedDb) {
-    cachedDb = getFirestore(cachedApp);
+    cachedDb = getFirestore(getFirebaseApp());
   }
   return cachedDb;
 }

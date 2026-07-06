@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ensureControl, submitQuestion } from "../lib/liveQueue";
+import { readSessionId, submitQuestion } from "../lib/liveQueue";
 import { isFirebaseConfigured } from "../lib/firebase";
 import {
   affiliations,
@@ -37,8 +37,8 @@ export function AskPage() {
     if (!configured) {
       return;
     }
-    // 현재 세션 ID를 미리 확보(없으면 생성). 제출 지연을 줄인다.
-    ensureControl()
+    // 현재 세션 ID를 미리 읽어둔다(참가자는 쓰기 권한이 없어 읽기만). 제출 지연을 줄인다.
+    readSessionId()
       .then((sessionId) => {
         sessionIdRef.current = sessionId;
       })
@@ -62,7 +62,12 @@ export function AskPage() {
     setError("");
     setPhase("submitting");
     try {
-      const sessionId = sessionIdRef.current || (await ensureControl());
+      const sessionId = sessionIdRef.current || (await readSessionId());
+      if (!sessionId) {
+        setError("아직 질문 접수가 열리지 않았어요. 잠시 후 다시 시도해 주세요.");
+        setPhase("form");
+        return;
+      }
       sessionIdRef.current = sessionId;
       await submitQuestion({ sessionId, ...validation.cleaned });
       try {

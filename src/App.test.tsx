@@ -14,8 +14,19 @@ vi.mock("./lib/firebase", () => ({
   }
 }));
 
+// 게이트는 로그인된 운영자로 모킹 (라우팅·렌더만 검증)
+vi.mock("./lib/operatorAuth", () => ({
+  watchOperatorAuth: (cb: (s: string) => void) => {
+    cb("signed-in");
+    return () => undefined;
+  },
+  signInOperator: () => Promise.resolve(),
+  signOutOperator: () => Promise.resolve()
+}));
+
 vi.mock("./lib/liveQueue", () => ({
   ensureControl: () => Promise.resolve("s-test"),
+  readSessionId: () => Promise.resolve("s-test"),
   watchControl: () => () => undefined,
   watchSessionQuestions: () => () => undefined,
   resetSession: () => Promise.resolve("s-test"),

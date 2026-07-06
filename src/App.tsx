@@ -3,6 +3,7 @@ import { RobotStage } from "./components/RobotStage";
 import { AskPage } from "./components/AskPage";
 import { LiveStage } from "./components/LiveStage";
 import { LiveOperator } from "./components/LiveOperator";
+import { OperatorGate } from "./components/OperatorGate";
 import { useMcSession } from "./hooks/useMcSession";
 import "./styles.css";
 
@@ -141,7 +142,11 @@ export default function App() {
   }
 
   if (path === "/stage") {
-    return <LiveStage />;
+    return (
+      <OperatorGate screenName="무대 화면">
+        <LiveStage />
+      </OperatorGate>
+    );
   }
 
   if (path === "/stage-rehearsal") {
@@ -149,7 +154,11 @@ export default function App() {
   }
 
   if (path === "/operator") {
-    return <LiveOperator />;
+    return (
+      <OperatorGate screenName="운영 콘솔">
+        <LiveOperator />
+      </OperatorGate>
+    );
   }
 
   if (path === "/operator-rehearsal") {
