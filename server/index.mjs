@@ -77,7 +77,7 @@ function hasGeminiApiKey(env) {
   return Boolean(envValue(env, "GEMINI_API_KEY", "").trim());
 }
 
-const defaultElevenLabsVoiceId = "bQlkYuipD5BHEhntA5iz"; // JY · 한국어 네이티브 · 상큼 발랄 업비트
+const defaultElevenLabsVoiceId = "cgSgspJ2msm6clMCkdW9"; // Jessica · 발랄하고 밝은 톤
 
 function hasElevenLabsApiKey(env) {
   return Boolean(envValue(env, "ELEVENLABS_API_KEY", "").trim());
@@ -385,11 +385,42 @@ async function createGeminiSpeechWithRetry({ env, fetchImpl, text, voice, retryD
   throw lastError;
 }
 
+// 클라이언트(mcFlow)의 자막 큐 분할과 같은 규칙으로 문장 끝 위치(문자 인덱스)를 찾는다
+export function sentenceEndIndices(text) {
+  const indices = [];
+  const pattern = /[^.!?。！？]+[.!?。！？]?/g;
+  let match;
+  while ((match = pattern.exec(text)) !== null) {
+    if (match[0].trim()) {
+      indices.push(match.index + match[0].length - 1);
+    }
+  }
+  return indices;
+}
+
+// ElevenLabs alignment(글자별 종료 시각)에서 문장별 발화 종료 시각(초)을 계산한다
+export function captionTimesFromAlignment(text, alignment) {
+  const endTimes = alignment?.character_end_times_seconds;
+  const characters = alignment?.characters;
+  if (!Array.isArray(endTimes) || !Array.isArray(characters) || endTimes.length !== characters.length) {
+    return null;
+  }
+
+  const boundaries = sentenceEndIndices(text);
+  if (boundaries.length === 0) {
+    return null;
+  }
+
+  const times = boundaries.map((index) => endTimes[Math.min(index, endTimes.length - 1)]);
+  return times.every((time) => Number.isFinite(time)) ? times : null;
+}
+
 async function createElevenLabsSpeech({ env, fetchImpl, text, voice }) {
   const voiceId = elevenLabsVoiceId(env, voice);
   const model = envValue(env, "ELEVENLABS_TTS_MODEL", "eleven_multilingual_v2");
+  // with-timestamps: 오디오와 함께 글자별 발화 타이밍을 받아 자막을 정확히 동기화한다
   const response = await fetchImpl(
-    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
+    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/with-timestamps?output_format=mp3_44100_128`,
     {
       method: "POST",
       headers: {
@@ -402,9 +433,9 @@ async function createElevenLabsSpeech({ env, fetchImpl, text, voice }) {
         // 행사 MC 톤: stability를 낮춰 억양 변화를 크게, style을 높여 감정 표현을 살리고
         // 살짝 빠른 속도로 톡톡 튀는 느낌을 준다
         voice_settings: {
-          stability: Number(envValue(env, "ELEVENLABS_STABILITY", "0.3")),
+          stability: Number(envValue(env, "ELEVENLABS_STABILITY", "0.22")),
           similarity_boost: 0.8,
-          style: Number(envValue(env, "ELEVENLABS_STYLE", "0.6")),
+          style: Number(envValue(env, "ELEVENLABS_STYLE", "0.75")),
           use_speaker_boost: true,
           speed: Number(envValue(env, "ELEVENLABS_SPEED", "1.07"))
         }
@@ -420,7 +451,16 @@ async function createElevenLabsSpeech({ env, fetchImpl, text, voice }) {
     throw new Error(message);
   }
 
-  return { buffer: Buffer.from(await response.arrayBuffer()), voiceId };
+  const payload = await response.json();
+  if (!payload?.audio_base64) {
+    throw new Error("ElevenLabs TTS 응답에 오디오 데이터가 없습니다.");
+  }
+
+  return {
+    buffer: Buffer.from(payload.audio_base64, "base64"),
+    voiceId,
+    captionTimes: captionTimesFromAlignment(text, payload.alignment)
+  };
 }
 
 function getOpenAIClient(openai, env) {
@@ -554,7 +594,7 @@ export function createApp(options = {}) {
 
       if (hasElevenLabsApiKey(env) && (requiredProvider === "elevenlabs" || !requiredProvider)) {
         try {
-          const { buffer, voiceId } = await createElevenLabsSpeech({
+          const { buffer, voiceId, captionTimes } = await createElevenLabsSpeech({
             env,
             fetchImpl,
             text,
@@ -564,6 +604,12 @@ export function createApp(options = {}) {
           response.setHeader("Content-Type", "audio/mpeg");
           response.setHeader("X-AI-MC-TTS-Provider", "elevenlabs");
           response.setHeader("X-AI-MC-TTS-Voice", voiceId);
+          if (captionTimes) {
+            response.setHeader(
+              "X-AI-MC-Caption-Times",
+              captionTimes.map((time) => time.toFixed(2)).join(",")
+            );
+          }
           response.send(buffer);
           return;
         } catch (elevenError) {

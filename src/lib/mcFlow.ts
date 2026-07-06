@@ -111,6 +111,22 @@ export function captionCueCount(text: string): number {
   return stageSentenceCuesForKorean(text).length;
 }
 
+// 문장별 발화 종료 시각(초) 목록으로 현재 자막 큐를 찾는다 (타임스탬프 방식).
+// currentTime이 times[k]를 지나기 전까지 k번째 문장을 보여준다.
+export function captionCueIndexForTimes(times: number[], currentTime: number): number {
+  if (times.length === 0) {
+    return 0;
+  }
+
+  for (let index = 0; index < times.length; index++) {
+    if (currentTime < times[index]) {
+      return index;
+    }
+  }
+
+  return times.length - 1;
+}
+
 // 오디오 재생 진행률(0~1)을 자막 큐 인덱스로 변환한다.
 // 큐는 문장 단위이고 발화 시간은 글자 수에 대략 비례하므로,
 // 문장 글자 수의 누적 비중으로 현재 문장을 찾는다.

@@ -7,7 +7,8 @@ import {
   stageLinesForKorean,
   statusLabel,
   captionCueCount,
-  captionCueIndexForProgress
+  captionCueIndexForProgress,
+  captionCueIndexForTimes
 } from "./mcFlow";
 
 describe("mcFlow", () => {
@@ -56,6 +57,17 @@ describe("mcFlow", () => {
     expect(stageCaptionLinesForKorean(answer, { isSpeaking: true, cueIndex: 1, maxLines: 2 })).toEqual([
       "두 번째 안내입니다."
     ]);
+  });
+
+  it("maps playback time to caption cues using sentence end timestamps", () => {
+    const times = [1.2, 4.5, 7.0];
+    expect(captionCueIndexForTimes(times, 0)).toBe(0);
+    expect(captionCueIndexForTimes(times, 1.19)).toBe(0);
+    expect(captionCueIndexForTimes(times, 1.2)).toBe(1);
+    expect(captionCueIndexForTimes(times, 4.6)).toBe(2);
+    // 마지막 문장은 오디오가 끝날 때까지 유지된다
+    expect(captionCueIndexForTimes(times, 99)).toBe(2);
+    expect(captionCueIndexForTimes([], 3)).toBe(0);
   });
 
   it("maps audio progress to caption cues weighted by sentence length", () => {

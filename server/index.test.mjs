@@ -151,9 +151,17 @@ describe("AI MC API", () => {
   it("prefers ElevenLabs when its key exists and no provider is required", async () => {
     const fetchImpl = vi.fn(async (url) => {
       if (String(url).includes("api.elevenlabs.io")) {
+        const text = "안녕하세요.";
         return {
           ok: true,
-          arrayBuffer: async () => Buffer.from([9, 9, 9, 9]).buffer
+          json: async () => ({
+            audio_base64: Buffer.from([9, 9, 9, 9]).toString("base64"),
+            alignment: {
+              characters: text.split(""),
+              character_start_times_seconds: text.split("").map((_, i) => i * 0.1),
+              character_end_times_seconds: text.split("").map((_, i) => (i + 1) * 0.1)
+            }
+          })
         };
       }
       throw new Error("unexpected fetch: " + url);
@@ -176,6 +184,9 @@ describe("AI MC API", () => {
     expect(response.headers["x-ai-mc-tts-provider"]).toBe("elevenlabs");
     expect(response.headers["x-ai-mc-tts-voice"]).toBe("voice-custom");
     expect(response.headers["content-type"]).toContain("audio/mpeg");
+    expect(fetchImpl.mock.calls[0][0]).toContain("/with-timestamps");
+    // "안녕하세요." = 6글자 → 문장 끝(마침표) 종료 시각 0.6초
+    expect(response.headers["x-ai-mc-caption-times"]).toBe("0.60");
   });
 
   it("falls back to Gemini when ElevenLabs fails in auto mode", async () => {

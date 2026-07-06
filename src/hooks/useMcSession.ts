@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { sampleQuestions } from "../data/sampleQuestions";
-import { captionCueIndexForProgress, nextLipFrame, plainMcCopy } from "../lib/mcFlow";
+import { captionCueIndexForProgress, captionCueIndexForTimes, nextLipFrame, plainMcCopy } from "../lib/mcFlow";
 import { speakingFaceCount } from "../lib/robotFaces";
 import type { AudienceQuestion, RobotState } from "../types";
 
@@ -9,21 +9,22 @@ const defaultGreeting =
 
 const geminiVoiceStorageKey = "ai-mc-gemini-voice";
 const ttsEngineStorageKey = "ai-mc-tts-engine";
-const elevenVoiceStorageKey = "ai-mc-eleven-voice";
+// v2: 기본 음색이 Jessica로 바뀌면서 예전 저장값을 무시하도록 키를 올림
+const elevenVoiceStorageKey = "ai-mc-eleven-voice-v2";
 
 export type TtsEngine = "elevenlabs" | "gemini";
 export const defaultTtsEngine: TtsEngine = "elevenlabs";
 
-// 한국어 네이티브 음색 (ElevenLabs 라이브러리, 유료 플랜 필요)
+// ElevenLabs 음색 (한국어 라이브러리 음색은 유료 플랜 필요)
 export const elevenVoiceOptions = [
-  { value: "bQlkYuipD5BHEhntA5iz", label: "JY · 상큼 발랄 업비트 (기본)" },
+  { value: "cgSgspJ2msm6clMCkdW9", label: "Jessica · 발랄하고 밝음 (기본)" },
+  { value: "bQlkYuipD5BHEhntA5iz", label: "JY · 상큼 발랄 업비트" },
   { value: "OSwaPSNdfituxkWcjlkR", label: "Kano · 귀여운 애니 캐릭터" },
   { value: "Lb7qkOn5hF8p7qfCDH8q", label: "Annie · 부드럽고 귀여움" },
-  { value: "6aXW46RTUz6Y2lkBGQ1a", label: "Farida · 활기차고 밝음" },
-  { value: "cgSgspJ2msm6clMCkdW9", label: "Jessica · 영어권 발랄 (예비)" }
+  { value: "6aXW46RTUz6Y2lkBGQ1a", label: "Farida · 활기차고 밝음" }
 ] as const;
 
-export const defaultElevenVoiceId = elevenVoiceOptions[0].value; // JY
+export const defaultElevenVoiceId = elevenVoiceOptions[0].value; // Jessica
 
 const engineLabels: Record<TtsEngine, string> = {
   elevenlabs: "ElevenLabs",
@@ -53,6 +54,8 @@ interface SpeechAsset {
   key: string;
   urls: string[];
   provider: string;
+  // ElevenLabs 타임스탬프 기반 문장별 발화 종료 시각(초). 없으면 글자 수 추정으로 폴백.
+  captionTimes: number[] | null;
 }
 
 function speechCacheKey(text: string, engine: TtsEngine, voice: string) {
@@ -153,17 +156,25 @@ export function useMcSession() {
       return;
     }
 
-    // 자막은 실제 오디오 재생 위치(currentTime/duration)를 따라간다.
-    // 말이 끝나기 전에 자막이 먼저 지나가지 않도록 문장 글자 수 비중으로 매핑한다.
+    // 자막은 실제 오디오 재생 위치를 따라간다. ElevenLabs 타임스탬프가 있으면
+    // 문장별 발화 종료 시각에 정확히 맞추고, 없으면(Gemini 폴백 등) 문장 글자 수
+    // 비중으로 근사한다. 말이 끝나기 전에 자막이 먼저 지나가지 않는다.
     const text = plainMcCopy(approvedAnswer);
     setCaptionCueIndex(0);
     let elapsedMs = 0;
-    const tickMs = 200;
+    const tickMs = 120;
     const id = window.setInterval(() => {
       const audio = playingAudioRef.current;
-      if (audio && Number.isFinite(audio.duration) && audio.duration > 0) {
-        setCaptionCueIndex(captionCueIndexForProgress(text, audio.currentTime / audio.duration));
-        return;
+      if (audio) {
+        const captionTimes = speechAssetRef.current?.captionTimes;
+        if (captionTimes && captionTimes.length > 0) {
+          setCaptionCueIndex(captionCueIndexForTimes(captionTimes, audio.currentTime));
+          return;
+        }
+        if (Number.isFinite(audio.duration) && audio.duration > 0) {
+          setCaptionCueIndex(captionCueIndexForProgress(text, audio.currentTime / audio.duration));
+          return;
+        }
       }
 
       // 오디오 정보를 못 얻는 환경(테스트·오류)에서는 기존 시간 기반으로 진행
@@ -229,9 +240,15 @@ export function useMcSession() {
         }
 
         const blob = await response.blob();
+        const captionTimesHeader = response.headers.get("X-AI-MC-Caption-Times") || "";
+        const captionTimes = captionTimesHeader
+          .split(",")
+          .map((value) => Number(value))
+          .filter((value) => Number.isFinite(value) && value >= 0);
         return {
           url: URL.createObjectURL(blob),
-          provider: response.headers.get("X-AI-MC-TTS-Provider") || ""
+          provider: response.headers.get("X-AI-MC-TTS-Provider") || "",
+          captionTimes: captionTimes.length > 0 ? captionTimes : null
         };
       })
     ).then((segments) => {
@@ -248,7 +265,8 @@ export function useMcSession() {
       const asset = {
         key,
         urls: segments.map((segment) => segment.url),
-        provider
+        provider,
+        captionTimes: segments[0]?.captionTimes ?? null
       };
 
       replaceSpeechAsset(asset);
