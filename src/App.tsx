@@ -1,5 +1,9 @@
 import { OperatorPanel } from "./components/OperatorPanel";
 import { RobotStage } from "./components/RobotStage";
+import { AskPage } from "./components/AskPage";
+import { LiveStage } from "./components/LiveStage";
+import { LiveOperator } from "./components/LiveOperator";
+import { OperatorGate } from "./components/OperatorGate";
 import { useMcSession } from "./hooks/useMcSession";
 import "./styles.css";
 
@@ -133,11 +137,31 @@ function OperatorScreen() {
 export default function App() {
   const path = window.location.pathname;
 
+  if (path === "/ask") {
+    return <AskPage />;
+  }
+
   if (path === "/stage") {
+    return (
+      <OperatorGate screenName="무대 화면">
+        <LiveStage />
+      </OperatorGate>
+    );
+  }
+
+  if (path === "/stage-rehearsal") {
     return <StageScreen />;
   }
 
   if (path === "/operator") {
+    return (
+      <OperatorGate screenName="운영 콘솔">
+        <LiveOperator />
+      </OperatorGate>
+    );
+  }
+
+  if (path === "/operator-rehearsal") {
     return <OperatorScreen />;
   }
 

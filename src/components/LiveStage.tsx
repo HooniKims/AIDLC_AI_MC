@@ -1,0 +1,151 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { RobotStage } from "./RobotStage";
+import { QrCode } from "./QrCode";
+import { useStagePlayer } from "../hooks/useStagePlayer";
+import { isFirebaseConfigured } from "../lib/firebase";
+import {
+  ensureControl,
+  markSpoken,
+  watchControl,
+  watchSessionQuestions,
+  type LiveControl,
+  type LiveQuestion
+} from "../lib/liveQueue";
+
+const PREFETCH_COUNT = 3;
+
+function askUrl(): string {
+  if (typeof window === "undefined") {
+    return "/ask";
+  }
+  return `${window.location.origin}/ask`;
+}
+
+function questionLabel(question: LiveQuestion): string {
+  return `${question.affiliation} ${question.nickname} · ${question.text}`;
+}
+
+export function LiveStage() {
+  const player = useStagePlayer();
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [control, setControl] = useState<LiveControl | null>(null);
+  const [questions, setQuestions] = useState<LiveQuestion[]>([]);
+  const lastNonceRef = useRef<number | null>(null);
+  const handlingRef = useRef(false);
+  const configured = isFirebaseConfigured();
+
+  // 세션 확보 + 제어 상태 구독
+  useEffect(() => {
+    if (!configured) {
+      return;
+    }
+    let unwatch: (() => void) | undefined;
+    ensureControl()
+      .then((id) => {
+        setSessionId(id);
+        unwatch = watchControl((next) => {
+          setControl(next);
+          if (next?.sessionId) {
+            setSessionId(next.sessionId);
+          }
+        });
+      })
+      .catch(() => undefined);
+    return () => unwatch?.();
+  }, [configured]);
+
+  // 현재 세션 질문 구독
+  useEffect(() => {
+    if (!configured || !sessionId) {
+      return;
+    }
+    return watchSessionQuestions(sessionId, setQuestions);
+  }, [configured, sessionId]);
+
+  // 답변 준비된 질문(승인 순)들의 TTS 오디오를 미리 받아 캐시
+  const readyQueue = useMemo(
+    () =>
+      questions
+        .filter((q) => q.answerReady && q.answer && (q.status === "answered" || q.status === "approved"))
+        .sort((a, b) => (a.approvedAt ?? 0) - (b.approvedAt ?? 0)),
+    [questions]
+  );
+
+  useEffect(() => {
+    readyQueue.slice(0, PREFETCH_COUNT).forEach((q) => {
+      if (q.answer) {
+        player.prepare(q.answer);
+      }
+    });
+  }, [readyQueue, player]);
+
+  const nowPlaying = useMemo(
+    () => (control?.nowPlayingId ? questions.find((q) => q.id === control.nowPlayingId) ?? null : null),
+    [control?.nowPlayingId, questions]
+  );
+
+  // speakNonce 증가 시 해당 질문 답변을 재생. 최초 스냅샷의 stale nonce는 무시.
+  useEffect(() => {
+    if (!control) {
+      return;
+    }
+    if (lastNonceRef.current === null) {
+      lastNonceRef.current = control.speakNonce;
+      return;
+    }
+    if (control.speakNonce <= lastNonceRef.current) {
+      return;
+    }
+    lastNonceRef.current = control.speakNonce;
+
+    const target = control.nowPlayingId
+      ? questions.find((q) => q.id === control.nowPlayingId)
+      : undefined;
+    if (!target || !target.answer || handlingRef.current) {
+      return;
+    }
+
+    handlingRef.current = true;
+    void player
+      .play(target.answer)
+      .then(() => markSpoken(target.id).catch(() => undefined))
+      .catch(() => undefined)
+      .finally(() => {
+        handlingRef.current = false;
+      });
+  }, [control, questions, player]);
+
+  if (!configured) {
+    return (
+      <main className="stage-screen">
+        <div className="live-stage-notice">Firebase 설정이 필요합니다. .env를 확인해 주세요.</div>
+      </main>
+    );
+  }
+
+  const questionText = nowPlaying ? questionLabel(nowPlaying) : undefined;
+
+  return (
+    <main className="stage-screen stage-screen--live">
+      <RobotStage
+        state={player.robotState}
+        question={player.isSpeaking ? questionText : undefined}
+        answer={player.spokenText}
+        lipFrame={player.lipFrame}
+        captionCueIndex={player.captionCueIndex}
+        variant="full"
+      />
+      <aside
+        // key로 상태 전환 시 재마운트해 위치는 점프, 페이드인만 재생 (자막 위 비행 방지)
+        key={player.isSpeaking ? "compact" : "idle"}
+        className={`stage-qr ${player.isSpeaking ? "stage-qr--compact" : "stage-qr--idle"}`}
+      >
+        <QrCode value={askUrl()} size={player.isSpeaking ? 132 : 220} className="stage-qr__img" />
+        <div className="stage-qr__caption">
+          <strong>QR을 찍고 질문하기</strong>
+          <span>궁금한 걸 남기면 AI MC가 답해드려요</span>
+        </div>
+      </aside>
+    </main>
+  );
+}

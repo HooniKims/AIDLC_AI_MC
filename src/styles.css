@@ -1097,3 +1097,536 @@ textarea:focus {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ===== 참가자 질문 제출 페이지 (/ask) — 모바일 우선 ===== */
+.ask-screen {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
+  background: radial-gradient(120% 120% at 50% 0%, #8e14dc 0%, #5a1a9e 45%, #2a0b52 100%);
+}
+
+.ask-card {
+  width: 100%;
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: clamp(22px, 6vw, 34px);
+  border-radius: 26px;
+  background: var(--confesta-vanilla);
+  box-shadow: 0 20px 50px rgba(20, 10, 41, 0.35);
+}
+
+.ask-kicker {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--confesta-grape);
+}
+
+.ask-title {
+  margin: 0;
+  font-size: clamp(1.5rem, 6vw, 1.95rem);
+  font-weight: 900;
+  color: var(--confesta-ink);
+  line-height: 1.2;
+}
+
+.ask-desc {
+  margin: 0 0 4px;
+  font-size: 0.98rem;
+  line-height: 1.5;
+  color: var(--confesta-muted);
+}
+
+.ask-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--confesta-ink);
+}
+
+.ask-counter {
+  float: right;
+  font-weight: 700;
+  font-style: normal;
+  color: var(--confesta-muted);
+}
+
+.ask-field input,
+.ask-field select,
+.ask-field textarea {
+  width: 100%;
+  padding: 14px 16px;
+  border: 2px solid var(--confesta-border);
+  border-radius: 14px;
+  font-size: 1.05rem;
+  font-family: inherit;
+  color: var(--confesta-ink);
+  background: #fff;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease;
+}
+
+.ask-field textarea {
+  resize: vertical;
+  min-height: 96px;
+  line-height: 1.4;
+}
+
+.ask-field input:focus,
+.ask-field select:focus,
+.ask-field textarea:focus {
+  outline: none;
+  border-color: var(--confesta-grape);
+}
+
+.ask-submit {
+  margin-top: 6px;
+  padding: 16px 20px;
+  border: none;
+  border-radius: 999px;
+  font-size: 1.1rem;
+  font-weight: 900;
+  color: #fff;
+  background: linear-gradient(120deg, #ff00a9, #8e14dc);
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(142, 20, 220, 0.4);
+  transition: transform 0.1s ease, opacity 0.15s ease;
+}
+
+.ask-submit:active {
+  transform: translateY(1px);
+}
+
+.ask-submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.ask-error {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #ffe3ef;
+  color: #b3004e;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.ask-card--success {
+  align-items: center;
+  text-align: center;
+  gap: 16px;
+  padding-top: clamp(30px, 8vw, 44px);
+  padding-bottom: clamp(30px, 8vw, 44px);
+}
+
+.ask-success-badge {
+  width: 68px;
+  height: 68px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--confesta-lime);
+  color: var(--confesta-ink);
+  font-size: 2rem;
+  font-weight: 900;
+  box-shadow: 0 8px 20px rgba(0, 244, 68, 0.4);
+}
+
+/* ===== 라이브 무대 QR 오버레이 ===== */
+.stage-screen--live {
+  position: relative;
+}
+
+.stage-qr {
+  position: absolute;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border-radius: 20px;
+  background: rgba(253, 248, 255, 0.94);
+  box-shadow: 0 12px 32px rgba(20, 10, 41, 0.35);
+  backdrop-filter: blur(6px);
+  /* 위치는 즉시 점프하고 페이드인만 한다 — 중앙→구석으로 '날아가는' 전환은
+     막 나타난 자막 위를 지나며 잠깐 가리므로 금지 */
+  animation: stage-qr-fade-in 0.35s ease both;
+}
+
+@keyframes stage-qr-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.stage-qr--idle {
+  right: 50%;
+  bottom: 8%;
+  transform: translateX(50%);
+  flex-direction: column;
+  text-align: center;
+  padding: 28px 32px;
+}
+
+.stage-qr--compact {
+  right: 3%;
+  bottom: 4%;
+  transform: none;
+}
+
+.stage-qr__img {
+  display: block;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.stage-qr__caption {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stage-qr__caption strong {
+  font-size: clamp(1rem, 1.6vw, 1.35rem);
+  font-weight: 900;
+  color: var(--confesta-ink);
+}
+
+.stage-qr__caption span {
+  font-size: clamp(0.78rem, 1.1vw, 0.98rem);
+  color: var(--confesta-muted);
+}
+
+.stage-qr--compact .stage-qr__caption {
+  max-width: 180px;
+}
+
+.live-stage-notice {
+  margin: auto;
+  padding: 24px;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #fff;
+  text-align: center;
+}
+
+/* ===== 라이브 운영 콘솔 (/operator) ===== */
+.live-op-notice {
+  margin: auto;
+  padding: 40px;
+  font-size: 1.1rem;
+  font-weight: 800;
+  text-align: center;
+  color: var(--confesta-ink);
+}
+
+.live-op-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 8px 4px 16px;
+}
+
+.live-op-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: var(--confesta-ink);
+}
+
+.live-op-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.live-op-stat {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--confesta-muted);
+}
+
+.live-op-link {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--confesta-grape);
+  text-decoration: none;
+}
+
+.live-op-reset {
+  padding: 9px 16px;
+  border: 2px solid var(--confesta-border);
+  border-radius: 999px;
+  background: #fff;
+  font-weight: 800;
+  color: var(--confesta-ink);
+  cursor: pointer;
+}
+
+.live-op-error {
+  margin: 0 4px 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #ffe3ef;
+  color: #b3004e;
+  font-weight: 700;
+}
+
+.live-op-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr;
+  gap: 18px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .live-op-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.live-op-col {
+  background: var(--confesta-vanilla);
+  border: 1px solid var(--confesta-border);
+  border-radius: 20px;
+  padding: 16px;
+  min-height: 240px;
+}
+
+.live-op-col__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.live-op-col__head h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 900;
+  color: var(--confesta-ink);
+}
+
+.live-op-col__head span {
+  min-width: 26px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--confesta-grape);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.live-op-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.live-op-empty {
+  margin: 0;
+  padding: 24px 8px;
+  color: var(--confesta-muted);
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+.live-q-card {
+  padding: 14px;
+  border: 1px solid var(--confesta-border);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: var(--confesta-soft-shadow);
+}
+
+.live-q-card--now {
+  border-color: var(--confesta-lime);
+  box-shadow: 0 0 0 3px rgba(0, 244, 68, 0.28);
+}
+
+.live-q-card--spoken {
+  opacity: 0.62;
+}
+
+.live-q-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.live-q-order {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--confesta-ink);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.live-q-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--confesta-blueberry);
+  color: #fff;
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.live-q-nick {
+  font-size: 0.86rem;
+  font-weight: 800;
+  color: var(--confesta-muted);
+}
+
+.live-q-now {
+  margin-left: auto;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #12a150;
+}
+
+.live-q-done {
+  margin-left: auto;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--confesta-muted);
+}
+
+.live-q-text {
+  margin: 0 0 10px;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--confesta-ink);
+}
+
+.live-q-answer {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(200, 255, 61, 0.28);
+  font-size: 0.92rem;
+  line-height: 1.45;
+  color: var(--confesta-ink);
+}
+
+.live-q-answer--pending {
+  background: rgba(90, 81, 118, 0.1);
+  color: var(--confesta-muted);
+  font-style: italic;
+}
+
+.live-q-answer--failed {
+  background: #ffe3ef;
+  color: #b3004e;
+}
+
+.live-q-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.live-btn {
+  flex: 1;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.92rem;
+  font-weight: 800;
+  cursor: pointer;
+  background: var(--confesta-border);
+  color: var(--confesta-ink);
+}
+
+.live-btn--approve {
+  background: var(--confesta-lime);
+}
+
+.live-btn--reject {
+  flex: 0 0 auto;
+  background: #fff;
+  border: 1px solid var(--confesta-border);
+  color: var(--confesta-muted);
+}
+
+.live-btn--speak {
+  background: linear-gradient(120deg, #ff00a9, #8e14dc);
+  color: #fff;
+}
+
+.live-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* 라이브 무대: 말하는 동안 자막이 우하단 QR 영역을 침범하지 않게 폭을 예약 */
+.stage-screen--live .stage-answer {
+  max-width: min(920px, calc(100% - 480px));
+}
+
+/* ===== 운영자 로그인 게이트 ===== */
+.gate-screen {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: radial-gradient(120% 120% at 50% 0%, #4c1d95 0%, #2a0b52 60%, #180633 100%);
+}
+
+.gate-card {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 30px;
+  border-radius: 22px;
+  background: var(--confesta-vanilla);
+  box-shadow: 0 20px 50px rgba(20, 10, 41, 0.4);
+  font-weight: 700;
+  color: var(--confesta-ink);
+}
+
+.gate-card--pending {
+  text-align: center;
+  color: var(--confesta-muted);
+}
+
+.gate-kicker {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--confesta-grape);
+}
+
+.gate-title {
+  margin: 0 0 6px;
+  font-size: 1.45rem;
+  font-weight: 900;
+}
