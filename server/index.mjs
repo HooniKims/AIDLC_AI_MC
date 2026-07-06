@@ -457,10 +457,13 @@ export function createApp(options = {}) {
       ttsModel: envValue(env, "OPENAI_TTS_MODEL", "gpt-4o-mini-tts"),
       ttsVoice: envValue(env, "OPENAI_TTS_VOICE", "shimmer"),
       ttsSpeed: ttsSpeed(env),
-      primaryTtsProvider: hasGeminiApiKey(env) ? "gemini" : "openai",
+      primaryTtsProvider: hasElevenLabsApiKey(env) ? "elevenlabs" : hasGeminiApiKey(env) ? "gemini" : "openai",
+      elevenLabsTtsModel: envValue(env, "ELEVENLABS_TTS_MODEL", "eleven_multilingual_v2"),
+      elevenLabsVoiceId: elevenLabsVoiceId(env),
       geminiTtsModel: activeGeminiTtsModel,
       geminiTtsStreaming: supportsGeminiTtsStreaming(activeGeminiTtsModel),
       geminiTtsVoice: envValue(env, "GEMINI_TTS_VOICE", "Leda"),
+      hasElevenLabsApiKey: hasElevenLabsApiKey(env),
       hasGeminiApiKey: hasGeminiApiKey(env),
       hasApiKey: hasApiKey(env)
     });

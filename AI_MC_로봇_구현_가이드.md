@@ -1,7 +1,8 @@
-# AI MC 로봇 웹앱 · 구현 가이드
+# AI MC 로봇 웹앱 · 구현 가이드 (as-built)
 
-> 큐트 로봇 캐릭터를 3D로 반응하는 AI MC로 만들어 `aidlc-ai-mc.vercel.app/operator`에 붙이기 위한 전체 설계 문서.
-> Next.js + React Three Fiber + ElevenLabs 기준. Claude Code에 그대로 넣어 작업 가능하도록 정리함.
+> 큐트 로봇 캐릭터를 3D로 반응하는 AI MC로 만든 실제 구현 문서.
+> Vite + React + React Three Fiber + Express(Vercel Functions) + Tripo + ElevenLabs 기준.
+> 초기 설계(Next.js 계획)에서 실제 구현으로 갱신됨. 구현 중 발견한 함정(§8)을 반드시 읽을 것.
 
 ---
 
@@ -11,434 +12,187 @@
 따라서 표정·립싱크를 3D 얼굴 근육으로 만들 필요가 없다.
 **"3D 몸체(GLB) + 스크린에 얼굴 이미지 텍스처를 교체"** 하는 방식이 가장 적은 노력으로 가장 그럴듯한 결과를 낸다.
 
-- 표정/입모양 → 스크린 메시에 얼굴 컷(12장) 텍스처를 갈아끼움
-- 몸짓 → 리깅된 본(팔·머리)을 코드로 회전
-- 생동감 → 대기 중 bobbing + 랜덤 눈 깜빡임(텍스처 교체)
+- 표정/입모양 → 스크린 위 텍스처 플레인에 얼굴 컷(7장)을 갈아끼움
+- 몸짓 → Tripo 리깅 클립 중 **팔 체인 트랙만** 재생 + 그룹 레벨 모션
+- 생동감 → 호흡 bob + 몸통 기울임 + 3.4초 주기 눈 깜빡임(텍스처 교체)
 
 ---
 
-## 1. 전체 아키텍처
+## 1. 실제 아키텍처
 
 ```
-[/operator 페이지]
-   │  질문 입력
+[/demo /stage /operator]  ← Vite React SPA (같은 useMcSession 훅 공유)
+   │  질문 선택/입력 → AI 답변 생성 → 자동 승인 → 로봇 말하기
    ▼
-[Vercel API Route: /api/answer]   ← 서버(비밀키 보관)
-   │  1) LLM 호출 → 답변 텍스트
-   │  2) ElevenLabs 호출 → 음성(mp3) + (선택)타임스탬프
+[Express 서버 = Vercel Functions]        ← 비밀키는 서버에만
+   ├─ POST /api/generate-answer   OpenAI Responses API
+   ├─ POST /api/tts               ElevenLabs(기본) / Gemini / OpenAI(폴백)
+   └─ GET  /api/health            키 존재 여부·모델 설정 확인
    ▼
-[프론트엔드 (React Three Fiber)]
-   ├─ 음성 재생 (HTMLAudioElement)
-   ├─ 립싱크: 음량/타임스탬프 → 스크린 얼굴 텍스처 교체
-   ├─ 제스처: 상황별 본 회전
-   └─ 대기 모션: bobbing + blink
+[프론트엔드]
+   ├─ 음성 재생 (HTMLAudioElement, blob URL)
+   ├─ 립싱크: WebAudio AnalyserNode 음량 → 입모양 사다리 4단계
+   ├─ 동작: 팔 스켈레탈 + 그룹 레벨 기울임/바운스
+   └─ 등장: 초록 코드 글리치 (클리핑 스윕 + 와이어프레임 + CSS 오버레이)
 ```
 
-**보안 원칙**: ElevenLabs / LLM API 키는 **절대 브라우저에 두지 않는다.**
-반드시 Vercel API Route(서버)에서만 호출하고, 프론트는 결과만 받는다.
+로컬 개발은 `npm run dev`(Express가 Vite 미들웨어 포함, 포트 5173).
+배포는 `server/vercelHandler.mjs`가 같은 `createApp`을 Vercel Functions로 감싼다.
+
+**보안 원칙**: ElevenLabs / Gemini / OpenAI / Tripo 키는 **절대 브라우저에 두지 않는다.**
+서버 라우트에서만 호출하고, 프론트는 오디오 blob만 받는다.
 
 ---
 
-## 2. 준비물 & 스택
+## 2. 3D 모델 파이프라인 (Tripo API)
 
-| 항목 | 사용 |
-|------|------|
-| 프레임워크 | Next.js (App Router) — Vercel 배포 |
-| 3D 렌더 | `three`, `@react-three/fiber`, `@react-three/drei` |
-| 음성 | ElevenLabs API (`text-to-speech`) |
-| 답변 생성 | LLM API (Claude 등) |
-| 3D 모델 | Tripo에서 생성한 **GLB (리깅 포함)** |
-| 얼굴 자산 | 얼굴 클로즈업 컷 12장 (PNG) |
+원본 GLB를 Tripo API로 리깅·애니메이션한다. 전 과정이 `scripts/tripo_rig.py`로 자동화되어 있다.
 
-설치:
 ```bash
-npm install three @react-three/fiber @react-three/drei
+# .env에 tripo_api_key 필요, 의존성: pip install tripo3d boto3 aiohttp
+python scripts/tripo_rig.py --check-only   # 리깅 가능 여부만 확인 (과금 없음)
+python scripts/tripo_rig.py                # 전체 파이프라인 실행
 ```
 
----
+파이프라인: `import_model`(GLB 업로드) → `animate_prerigcheck` → `animate_rig`(v2.0)
+→ `animate_retarget`(idle/walk/jump/turn 4개 프리셋을 한 GLB로).
 
-## 3. GLB 준비 (Tripo)
-
-1. **모델 생성** — HD 모델 / 울트라 메시 ON / 텍스처 4K / PBR ON
-2. **토폴로지: 쿼드** — 애니메이션 변형 안정성
-3. **폴리곤 수: 30,000~50,000** — 웹 실시간 구동에 적합 (200만은 과함)
-4. 생성 완료 후 왼쪽 **"애니메이션" 탭 → 오토리깅** 적용
-   - 리깅이 있어야 팔·머리 제스처 제어 가능
-5. **GLB(.glb) 형식으로 export**
-6. 파일을 프로젝트 `public/robot.glb` 위치에 저장
-7. 얼굴 컷 12장은 `public/faces/` 폴더에 저장
-   - 예: `face_neutral.png`, `face_open.png`, `face_smile_open.png`,
-     `face_surprised.png`, `face_slight.png`, `face_happy_closed.png` 등
-
-> ⚠️ 리깅 후에는 본(bone) 이름을 확인해 둘 것. 팔/머리 본 이름이 제스처 코드에 필요하다.
+- 산출물: `public/models/robot-animated.glb` (앱이 사용, 클립 이름 `NlaTrack`~`NlaTrack.003`)
+- 상태 파일: `assets/models/tripo-pipeline-state.json` — 완료된 태스크 ID를 기억해 재실행 시 재과금 없이 건너뜀
+- 비용: 전체 1회 약 65크레딧 (리깅 ~20 + 리타겟)
 
 ---
 
-## 4. 프로젝트 구조
+## 3. 3D 로봇 구현 (`src/components/Robot3D.tsx`)
+
+### 3-1. 모델 정규화
+Tripo 결과물은 +X를 바라보므로 scene을 -90° Y회전 후, 바닥 y=0 / 중심 x·z=0 / 높이 1.0으로 정규화한다.
+
+### 3-2. 동작 설계 — 팔만 스켈레탈, 나머지는 그룹 레벨
+```
+스켈레탈 (클립 트랙 필터링)     그룹 레벨 (useFrame 절차적)
+├─ 0_Left_Limb_* (왼팔)         ├─ 호흡 bob (y 사인파)
+└─ 0_Right_Limb_* (오른팔)      ├─ 상태별 기울임 (경청/생각/말하기)
+                                ├─ idle 몸통 스웨이
+   다리·척추·머리·루트 = 고정    └─ 말하기 시작 바운스 (감쇠 사인)
+```
+- `filterClipToBones()`로 팔 체인 트랙만 남긴다 (`IDLE_WEIGHT 0.75`, `IDLE_TIMESCALE 0.55`)
+- 휴머노이드 클립을 짧은 다리에 그대로 적용하면 다리가 꼬인다 → 다리 트랙 제거로 해결
+- 말하기 시작 시 jump 클립(팔 모션)+그룹 바운스를 함께 재생
+
+### 3-3. 얼굴 스크린 플레인 — ⚠️ 본에 attach 금지
+얼굴 플레인은 **그룹 좌표 (0, 0.6, 0.265)에 고정**한다.
+Tripo 리그는 본 월드좌표와 눈에 보이는 메시 위치가 어긋나 있어(스키닝이 보정),
+`headBone.attach(plane)`을 하면 애니메이션 시작 시 플레인이 로봇 뒤 위쪽으로 끌려간다.
+머리를 클립으로 움직이지 않고 그룹 레벨로만 움직이므로 고정 플레인이 항상 정렬된다.
+
+### 3-4. 등장 연출 (초록 코드 글리치, ~2.6초)
+- 3D: 클리핑 플레인이 아래→위로 스윕하며 머티리얼라이즈 + 노이즈 타이밍에 초록 와이어프레임 스왑 + 스캔 바
+- CSS(`robot-canvas--entering`): 스캔라인·코드 레인 오버레이 + 지터 필터
+- 모델 로딩 실패 대비 8초 안전 타임아웃
+- WebGL 미지원 장비는 2D 포즈 이미지 폴백 (같은 CSS 글리치 적용)
+
+---
+
+## 4. 얼굴 시스템 (`src/lib/robotFaces.ts`, `public/faces/`)
+
+| 컷 | 파일 | 용도 |
+|----|------|------|
+| neutral | face_neutral.png | 일자 입 (무음) |
+| surprised | face_surprised.png | 작은 O (낮은 음량) |
+| smileOpen | face_smile_open.png | 타원 (중간 음량) |
+| open | face_open.png | 활짝 D (높은 음량) |
+| blink | face_blink.png | **감은 눈 ⌣⌣** (합성 생성) |
+| slight / happyClosed | 나머지 | 생각 표정 등 보조 |
+
+- **입모양 사다리**: `speakingFaceSequence = [neutral, surprised, smileOpen, open]` — 입이 벌어지는 크기 순. 음량 레벨이 인덱스로 매핑된다.
+- **깜빡임**: `faceForFrame(state, lipFrame, blinking)`에서 blink가 최우선 (말하는 중에도). 주기 3.4초, 길이 0.18초.
+- `face_blink.png`는 face_neutral에서 눈을 지우고(깨끗한 스크린 픽셀에 2차 곡면 피팅으로 복원) 감은 눈 아크를 그려 합성했다. 재생성 스크립트는 세션 기록 참고 (PIL 기반).
+
+---
+
+## 5. 립싱크 (`src/hooks/useMcSession.ts`)
+
+재생 중인 오디오에 WebAudio `AnalyserNode`를 연결해 **실제 음량(RMS)**을 120ms 간격으로 측정한다.
 
 ```
-app/
-  operator/
-    page.tsx              # 오퍼레이터 화면 (질문 입력 + 3D 무대)
-  api/
-    answer/route.ts       # 서버: LLM + ElevenLabs 호출
-components/
-  RobotStage.tsx          # <Canvas> 3D 무대
-  RobotModel.tsx          # GLB 로드 + 표정/립싱크/모션
-lib/
-  useLipSync.ts           # 음량 기반 립싱크 훅
-public/
-  robot.glb
-  faces/*.png
+rms → 최근 피크 대비 정규화 → lipFrameForLevel() → 입모양 사다리 인덱스
 ```
 
----
+- **피크 감쇠가 핵심**: `lipPeakDecay = 0.92` (tick당 8%). 감쇠가 느리면 도입부의 큰 소리에
+  피크가 고정되어 이후 입이 계속 "다문 입" 판정이 난다 (실제로 겪은 버그).
+- 무음 게이트 `lipSilenceFloor = 0.015` 아래는 입을 다문다.
+- AudioContext는 running 상태일 때만 오디오를 재라우팅 — 연결 실패해도 소리는 정상 재생.
+- 분석기를 못 쓰는 환경은 기존 순환 방식으로 폴백.
+- 엔진 무관: ElevenLabs든 Gemini든 재생 오디오를 분석하므로 동일하게 동작한다.
 
-## 5. 단계별 구현
-
-### 5-1. 서버 라우트 — LLM + ElevenLabs (핵심: 키 보호)
-
-`app/api/answer/route.ts`
-```ts
-import { NextRequest, NextResponse } from "next/server";
-
-export async function POST(req: NextRequest) {
-  const { question } = await req.json();
-
-  // 1) LLM으로 답변 생성 (예: Claude API)
-  //    실제 답변 생성 로직으로 교체
-  const answerText = await generateAnswer(question);
-
-  // 2) ElevenLabs TTS 호출
-  const voiceId = process.env.ELEVENLABS_VOICE_ID!;
-  const ttsRes = await fetch(
-    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
-    {
-      method: "POST",
-      headers: {
-        "xi-api-key": process.env.ELEVENLABS_API_KEY!, // 서버에서만 사용
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        text: answerText,
-        model_id: "eleven_multilingual_v2", // 한국어 지원 모델
-        voice_settings: { stability: 0.5, similarity_boost: 0.75 },
-      }),
-    }
-  );
-
-  const audioBuffer = await ttsRes.arrayBuffer();
-  const audioBase64 = Buffer.from(audioBuffer).toString("base64");
-
-  return NextResponse.json({
-    text: answerText,
-    audio: `data:audio/mpeg;base64,${audioBase64}`,
-  });
-}
-
-async function generateAnswer(question: string): Promise<string> {
-  // TODO: LLM API 연결
-  return "안녕하세요! 무엇을 도와드릴까요?";
-}
-```
-
-환경변수 (`.env.local` + Vercel 프로젝트 설정):
-```
-ELEVENLABS_API_KEY=xxxxx
-ELEVENLABS_VOICE_ID=xxxxx
-```
-
-> 립싱크 정확도를 높이려면 `with-timestamps` 엔드포인트를 사용해 글자별 타이밍도 함께 받는다 (방식 B, 아래 5-4 참고).
+업그레이드 경로: ElevenLabs 유료 플랜의 `with-timestamps` 엔드포인트로 글자 단위 타이밍을 받으면
+"이 글자를 발음하는 순간 이 입모양" 수준의 정밀 립싱크·자막 싱크가 가능하다.
 
 ---
 
-### 5-2. 3D 무대
+## 6. 음성 엔진 (`server/index.mjs` `/api/tts`)
 
-`components/RobotStage.tsx`
-```tsx
-"use client";
-import { Canvas } from "@react-three/fiber";
-import { Environment, OrbitControls } from "@react-three/drei";
-import { RobotModel } from "./RobotModel";
+- **기본: ElevenLabs** (`eleven_multilingual_v2`, 기본 음색 Jessica `cgSgspJ2msm6clMCkdW9`)
+- 운영 콘솔에서 Gemini(`gemini-2.5-flash-preview-tts`, Leda)로 전환 가능
+- 클라이언트가 `requireProvider`를 보내 한 답변 안에서 엔진이 섞이지 않게 **강제 고정**
+  — 실패 시 다른 엔진으로 폴백하지 않고 오류 표시 (무대에서 목소리가 갑자기 바뀌는 사고 방지)
+- 음색 선택: ElevenLabs 4종(Jessica/Laura/Bella/Sarah), Gemini 5종 — localStorage에 저장
+- 답변 생성 → 자동 승인 → 백그라운드 TTS 사전 생성 → `로봇 말하기` 즉시 재생
 
-export function RobotStage({ audioUrl }: { audioUrl: string | null }) {
-  return (
-    <Canvas camera={{ position: [0, 1.2, 3.2], fov: 40 }}>
-      <ambientLight intensity={0.7} />
-      <directionalLight position={[3, 5, 2]} intensity={1.2} />
-      <Environment preset="city" />
-      <RobotModel audioUrl={audioUrl} />
-      {/* 개발 중 시점 조정용. 배포 시 제거/제한 가능 */}
-      <OrbitControls enablePan={false} />
-    </Canvas>
-  );
-}
-```
+### ElevenLabs 무료 티어 제약 (실측)
+- 월 10,000 크레딧(≈글자 수). 한국어 답변 1개 ≈ 100~150자
+- **라이브러리(커뮤니티) 보이스는 API 호출 불가** (402 `paid_plan_required`) — 기본 제공 보이스만 가능
+- 유료(Starter $5~) 전환 시: 한국어 네이티브 보이스(JY, Claire 등) + 타임스탬프 립싱크
+- 음색 비교 샘플: `assets/tts-samples/*.mp3`
 
 ---
 
-### 5-3. 로봇 모델 — 로드 + 얼굴 텍스처 + 모션
+## 7. 배포 (Vercel)
 
-`components/RobotModel.tsx`
-```tsx
-"use client";
-import { useRef, useMemo, useEffect } from "react";
-import { useFrame } from "@react-three/fiber";
-import { useGLTF, useTexture } from "@react-three/drei";
-import * as THREE from "three";
-import { useLipSync } from "@/lib/useLipSync";
-
-const FACES = {
-  closed: "/faces/face_neutral.png",
-  mid:    "/faces/face_slight.png",
-  open:   "/faces/face_open.png",
-  smile:  "/faces/face_smile_open.png",
-  blink:  "/faces/face_happy_closed.png",
-};
-
-export function RobotModel({ audioUrl }: { audioUrl: string | null }) {
-  const group = useRef<THREE.Group>(null);
-  const { scene } = useGLTF("/robot.glb");
-  const textures = useTexture(FACES);
-
-  // 텍스처 색공간 보정
-  useEffect(() => {
-    Object.values(textures).forEach((t) => (t.colorSpace = THREE.SRGBColorSpace));
-  }, [textures]);
-
-  // 얼굴 스크린 메시 찾기 (최초 1회, 이름은 GLB에 맞게 수정)
-  const screenMat = useMemo(() => {
-    let mat: THREE.MeshStandardMaterial | null = null;
-    scene.traverse((o: any) => {
-      // 콘솔에 이름 찍어보고 스크린 메시명으로 교체할 것
-      // console.log(o.name);
-      if (o.isMesh && /screen|face|display/i.test(o.name)) {
-        mat = o.material as THREE.MeshStandardMaterial;
-      }
-    });
-    return mat;
-  }, [scene]);
-
-  // 립싱크: 음량 → 'closed' | 'mid' | 'open' | 'smile'
-  const mouthState = useLipSync(audioUrl);
-
-  // 눈 깜빡임 타이머
-  const blinkUntil = useRef(0);
-  useEffect(() => {
-    const id = setInterval(() => {
-      blinkUntil.current = performance.now() + 130; // 130ms 깜빡
-    }, 3000 + Math.random() * 2500);
-    return () => clearInterval(id);
-  }, []);
-
-  useFrame((state) => {
-    // 1) 대기 bobbing
-    if (group.current) {
-      group.current.position.y = Math.sin(state.clock.elapsedTime * 1.6) * 0.04;
-    }
-    // 2) 얼굴 텍스처 결정 (깜빡임 우선)
-    if (screenMat) {
-      const blinking = performance.now() < blinkUntil.current;
-      const key = blinking ? "blink" : mouthState; // closed/mid/open/smile
-      const tex = (textures as any)[key] ?? textures.closed;
-      if (screenMat.map !== tex) {
-        screenMat.map = tex;
-        screenMat.needsUpdate = true;
-      }
-    }
-  });
-
-  return <primitive ref={group} object={scene} scale={1} />;
-}
-
-useGLTF.preload("/robot.glb");
-```
-
-> 스크린 메시 이름을 모르면, `scene.traverse`에서 `console.log(o.name)`으로 전부 찍어 확인한 뒤 정규식(`/screen|face|display/i`)을 실제 이름에 맞게 교체한다.
+- **⚠️ Git 연동이 안 되어 있다** — push해도 자동 배포되지 않는다. 반드시 CLI로:
+  ```bash
+  npx vercel --prod --yes
+  ```
+- 환경 변수는 Vercel 프로젝트(Production + Preview)에 등록: `.env.example`의 키 전부
+  (`tripo_api_key`, `PORT` 제외 가능). CLI: `printf '%s' "값" | npx vercel env add KEY production`
+- 배포 확인:
+  ```bash
+  curl https://aidlc-ai-mc.vercel.app/api/health
+  # primaryTtsProvider: "elevenlabs", hasElevenLabsApiKey: true 확인
+  curl -X POST https://aidlc-ai-mc.vercel.app/api/tts \
+    -H "Content-Type: application/json" \
+    -d '{"text":"배포 테스트입니다.","requireProvider":"elevenlabs"}' -o /dev/null -D -
+  # X-AI-MC-TTS-Provider: elevenlabs 헤더 확인
+  ```
 
 ---
 
-### 5-4. 립싱크 훅
+## 8. 구현 중 발견한 함정 (트러블슈팅)
 
-**방식 A — 음량 기반 (기본, 간단)**
-
-`lib/useLipSync.ts`
-```ts
-"use client";
-import { useEffect, useRef, useState } from "react";
-
-type Mouth = "closed" | "mid" | "open" | "smile";
-
-export function useLipSync(audioUrl: string | null): Mouth {
-  const [mouth, setMouth] = useState<Mouth>("closed");
-  const raf = useRef<number>(0);
-
-  useEffect(() => {
-    if (!audioUrl) { setMouth("closed"); return; }
-
-    const audio = new Audio(audioUrl);
-    const ctx = new AudioContext();
-    const src = ctx.createMediaElementSource(audio);
-    const analyser = ctx.createAnalyser();
-    analyser.fftSize = 512;
-    src.connect(analyser);
-    analyser.connect(ctx.destination);
-
-    const data = new Uint8Array(analyser.frequencyBinCount);
-
-    const loop = () => {
-      analyser.getByteFrequencyData(data);
-      const avg = data.reduce((a, b) => a + b, 0) / data.length;
-      // 임계값은 실제 음성에 맞게 튜닝
-      if (avg < 12) setMouth("closed");
-      else if (avg < 30) setMouth("mid");
-      else if (avg < 55) setMouth("open");
-      else setMouth("smile");
-      raf.current = requestAnimationFrame(loop);
-    };
-
-    audio.play().then(() => loop());
-    audio.onended = () => setMouth("closed");
-
-    return () => {
-      cancelAnimationFrame(raf.current);
-      audio.pause();
-      ctx.close();
-    };
-  }, [audioUrl]);
-
-  return mouth;
-}
-```
-
-**방식 B — 타임스탬프 기반 (더 정교)**
-
-- 서버에서 ElevenLabs `/v1/text-to-speech/{voice_id}/with-timestamps` 호출
-- 응답의 `alignment.characters` + `character_start_times_seconds`를 함께 프론트로 전달
-- 오디오 `currentTime`에 맞춰 현재 발음 중인 글자를 찾고,
-  모음(ㅏ/ㅣ/ㅜ/ㅗ)·자음 계열에 따라 입모양 컷을 매핑
-- 음량 방식보다 부드럽고 발음 느낌이 살아남
-
-> 시작은 방식 A로 붙여 동작을 확인하고, 완성도를 높일 때 방식 B로 교체하는 순서를 권장.
+| 증상 | 원인 | 해결 |
+|------|------|------|
+| 입모양이 화면에서 안 변함 (데이터는 정상) | 얼굴 플레인을 머리 본에 attach → 애니메이션 시작 시 본 좌표 어긋남으로 플레인이 로봇 뒤로 이동, 모델의 고정 얼굴만 보임 | 플레인 그룹 고정 (§3-3) |
+| 말 시작만 입이 움직이고 멈춤 | 립싱크 피크 감쇠가 너무 느려 도입부 음량에 기준 고정 | `lipPeakDecay 0.92` (§5) |
+| 눈 깜빡임이 안 보임 | `face_happy_closed.png`가 이름과 달리 눈 뜬 이미지 | 진짜 감은 눈 `face_blink.png` 합성 (§4) |
+| 다리가 꼬여 매달린 자세 | 휴머노이드 idle 클립을 짧은 다리에 풀 가중치 적용 | 다리 트랙 제거, 팔만 애니메이션 (§3-2) |
+| 얼굴과 머리가 가끔 어긋남 | 머리/척추 트랙이 고정 플레인과 별개로 움직임 | 머리·척추도 트랙 제거, 그룹 모션으로 일원화 |
+| ElevenLabs 한국어 보이스 402 | 무료 티어는 라이브러리 보이스 API 불가 | 기본 보이스 사용 or 유료 전환 (§6) |
+| push해도 배포 안 됨 | Vercel Git 연동 없음 | `npx vercel --prod` (§7) |
 
 ---
 
-### 5-5. 제스처 (본 회전)
+## 9. 확장 아이디어
 
-리깅 후 확인한 본 이름을 이용해 상황별 동작 부여.
+- ElevenLabs 유료 전환 → 한국어 네이티브 보이스 + 타임스탬프 정밀 립싱크/자막
+- `/stage`와 `/operator`를 다른 기기에서 열 때의 상태 동기화 (BroadcastChannel/서버 푸시) — 현재는 탭별 독립 상태라 `/demo` 한 화면 운영 기준
+- walk/turn 클립 활용 (등장·퇴장 연출)
+- 관객 질문 STT 입력
 
-```ts
-// 예시: 답변 시작 시 인사 제스처
-function playGesture(scene: THREE.Object3D, type: "wave" | "nod" | "idle") {
-  const arm = scene.getObjectByName("Arm_R"); // 실제 본 이름으로 교체
-  const head = scene.getObjectByName("Head");
-  // Tween.js / GSAP 또는 useFrame에서 시간 기반 보간으로 회전값 조절
-  // wave: arm.rotation.z 를 좌우로 흔들기
-  // nod: head.rotation.x 를 살짝 끄덕이기
-}
-```
+## 10. 진행 순서 요약 (재현용)
 
-- 인사말 답변 → `wave`
-- 설명/안내 → `nod` (가벼운 끄덕임)
-- 대기 → `idle` (bobbing만)
-
-> 복잡한 모션캡처 불필요. 팔·머리 본 1~2개의 회전만으로 충분히 살아있는 느낌이 난다.
-
----
-
-### 5-6. /operator 페이지 통합
-
-`app/operator/page.tsx`
-```tsx
-"use client";
-import { useState } from "react";
-import { RobotStage } from "@/components/RobotStage";
-
-export default function OperatorPage() {
-  const [q, setQ] = useState("");
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [answer, setAnswer] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  async function ask() {
-    if (!q.trim()) return;
-    setLoading(true);
-    const res = await fetch("/api/answer", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question: q }),
-    });
-    const data = await res.json();
-    setAnswer(data.text);
-    setAudioUrl(data.audio); // base64 data URL → 립싱크 훅이 재생
-    setLoading(false);
-  }
-
-  return (
-    <div style={{ display: "grid", gridTemplateRows: "1fr auto", height: "100vh" }}>
-      <div style={{ position: "relative" }}>
-        <RobotStage audioUrl={audioUrl} />
-        {answer && <div className="caption">{answer}</div>}
-      </div>
-      <div style={{ display: "flex", gap: 8, padding: 16 }}>
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && ask()}
-          placeholder="질문을 입력하세요"
-          style={{ flex: 1, padding: 12, borderRadius: 12 }}
-        />
-        <button onClick={ask} disabled={loading}>
-          {loading ? "생각 중..." : "질문"}
-        </button>
-      </div>
-    </div>
-  );
-}
-```
-
----
-
-## 6. 보안 체크리스트
-
-- [ ] ElevenLabs / LLM API 키는 **서버(API Route)에서만** 사용, 프론트 노출 금지
-- [ ] `.env.local`은 커밋하지 않음 (`.gitignore` 확인)
-- [ ] Vercel 프로젝트 환경변수에 키 등록
-- [ ] API Route에 **호출 제한(rate limit)** 적용 — TTS 비용 폭주 방지
-- [ ] 입력값(question) 길이 제한 — 과도한 TTS 요청 차단
-- [ ] 필요 시 간단한 인증/토큰으로 오퍼레이터 페이지 보호
-
----
-
-## 7. 성능 & 배포 팁
-
-- **GLB 폴리곤 3~5만 유지** — 모바일에서도 부드럽게 구동
-- 텍스처 4K로 충분 (8K는 로딩 부담)
-- `useGLTF.preload`로 초기 로딩 최적화
-- 얼굴 컷 PNG는 적절히 압축 (각 100KB 내외 목표)
-- 음성은 스트리밍 대신 완성본 재생이 립싱크 동기화에 유리
-- 첫 방문 시 AudioContext는 **사용자 클릭 이후 생성** (브라우저 자동재생 정책)
-
----
-
-## 8. 확장 아이디어
-
-- 답변 감정에 따라 얼굴 컷 자동 선택 (기쁨→활짝웃음, 놀람→o입)
-- 로딩 중 "생각 중" 표정/포즈 표시
-- 음성 인식(STT) 연동으로 말로 질문받기
-- 여러 대기 모션 랜덤 재생으로 지루함 방지
-- 대화 로그 저장 및 자주 묻는 질문 캐싱(TTS 재사용 → 비용 절감)
-
----
-
-## 9. 진행 순서 요약
-
-1. Tripo에서 GLB(리깅 포함) 완성 → `public/robot.glb`
-2. 얼굴 컷 12장 → `public/faces/`
-3. `npm install three @react-three/fiber @react-three/drei`
-4. 스크린 메시 이름 / 본 이름 콘솔로 확인
-5. 방식 A 립싱크로 먼저 동작 확인
-6. 제스처(본 회전) 추가
-7. ElevenLabs 서버 라우트 연결 (키 보호)
-8. 완성도 높이기 → 방식 B(타임스탬프) 립싱크로 교체
-9. Vercel 배포 + 환경변수 등록
+1. `cp .env.example .env` 후 키 입력 (OpenAI, ElevenLabs, Gemini)
+2. `npm install && npm run dev` → `/demo`에서 리허설
+3. 모델을 다시 만들 일이 있으면: 원본 GLB 준비 → `python scripts/tripo_rig.py`
+4. `npm test && npm run build` 통과 확인
+5. `npx vercel --prod --yes` 배포 → §7 배포 확인 커맨드 실행
