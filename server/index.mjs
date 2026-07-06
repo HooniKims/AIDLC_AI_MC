@@ -4,11 +4,40 @@ import dotenv from "dotenv";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { bearerToken, verifyFirebaseIdToken } from "./firebaseAuth.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const defaultRootDir = path.resolve(__dirname, "..");
 const defaultGeminiTtsModel = "gemini-2.5-flash-preview-tts";
 const geminiStreamingApiRevision = "2026-05-20";
+
+// 비용 유발 API 입력 상한 (거대 페이로드로 인한 비용 폭탄 차단)
+const maxQuestionChars = 400;
+const maxTtsChars = 800;
+
+// 간이 레이트리밋: 인증된 스태프 기준이라 느슨하게. 인증 우회 시도까지 방어하는 2차선.
+const rateWindowMs = 60_000;
+const rateMaxPerWindow = 40;
+const rateBuckets = new Map();
+
+function rateLimited(key) {
+  const now = Date.now();
+  const bucket = rateBuckets.get(key);
+  if (!bucket || now > bucket.resetAt) {
+    rateBuckets.set(key, { count: 1, resetAt: now + rateWindowMs });
+    return false;
+  }
+  bucket.count += 1;
+  return bucket.count > rateMaxPerWindow;
+}
+
+function clientKey(request) {
+  const fwd = request.headers?.["x-forwarded-for"];
+  if (typeof fwd === "string" && fwd) {
+    return fwd.split(",")[0].trim();
+  }
+  return request.socket?.remoteAddress || "unknown";
+}
 
 dotenv.config();
 
@@ -525,7 +554,32 @@ export function createApp(options = {}) {
   const rootDir = options.rootDir || defaultRootDir;
   const fetchImpl = options.fetchImpl || globalThis.fetch;
 
+  // 비용 유발 API는 256KB로 충분(질문·답변 텍스트). 거대 본문 자체를 차단.
+  app.use("/api/generate-answer", express.json({ limit: "256kb" }));
+  app.use("/api/tts", express.json({ limit: "256kb" }));
   app.use(express.json({ limit: "1mb" }));
+
+  const firebaseProjectId = envValue(env, "VITE_FIREBASE_PROJECT_ID", "");
+
+  // 로그인한 스태프만 비용 유발 API를 호출하도록 Firebase ID 토큰을 검증한다.
+  // 참가자(/ask)는 이 API를 쓰지 않으므로 사용성 영향이 없다.
+  // Firebase 미설정 환경(로컬 개발 등)에서는 게이트를 열어 개발 편의를 유지한다.
+  async function requireStaff(request, response) {
+    if (!firebaseProjectId) {
+      return true;
+    }
+    if (rateLimited(clientKey(request))) {
+      response.status(429).json({ error: "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." });
+      return false;
+    }
+    const token = bearerToken(request);
+    const payload = await verifyFirebaseIdToken(token, firebaseProjectId, fetchImpl);
+    if (!payload) {
+      response.status(401).json({ error: "로그인이 필요합니다." });
+      return false;
+    }
+    return true;
+  }
 
   app.get("/api/health", (_request, response) => {
     refreshRuntimeEnv(env, rootDir);
@@ -549,8 +603,11 @@ export function createApp(options = {}) {
   });
 
   app.post("/api/generate-answer", async (request, response) => {
+    if (!(await requireStaff(request, response))) {
+      return;
+    }
     refreshRuntimeEnv(env, rootDir);
-    const question = String(request.body?.question || "").trim();
+    const question = String(request.body?.question || "").trim().slice(0, maxQuestionChars);
 
     if (!question) {
       response.status(400).json({ error: "질문을 입력해 주세요." });
@@ -581,15 +638,18 @@ export function createApp(options = {}) {
         model
       });
     } catch (error) {
-      response.status(500).json({
-        error: error?.message || "AI 답변 생성 중 오류가 발생했습니다."
-      });
+      // 내부 오류 상세(모델/제공자 메시지)는 로그로만 남기고 클라이언트엔 일반 메시지
+      console.error("[generate-answer]", error?.message || error);
+      response.status(500).json({ error: "AI 답변 생성 중 오류가 발생했습니다." });
     }
   });
 
   app.post("/api/tts", async (request, response) => {
+    if (!(await requireStaff(request, response))) {
+      return;
+    }
     refreshRuntimeEnv(env, rootDir);
-    const text = plainMcCopy(request.body?.text || "");
+    const text = plainMcCopy(request.body?.text || "").slice(0, maxTtsChars);
     const requiredProvider = String(request.body?.requireProvider || "").trim().toLowerCase();
 
     if (!text) {
@@ -644,10 +704,9 @@ export function createApp(options = {}) {
           response.send(buffer);
           return;
         } catch (elevenError) {
+          console.error("[tts:elevenlabs]", elevenError?.message || elevenError);
           if (requiredProvider === "elevenlabs") {
-            response.status(502).json({
-              error: `ElevenLabs 음성 생성에 실패했습니다. ${elevenError?.message || "잠시 후 다시 시도해 주세요."}`
-            });
+            response.status(502).json({ error: "음성 생성에 실패했습니다. 잠시 후 다시 시도해 주세요." });
             return;
           }
         }
@@ -669,10 +728,9 @@ export function createApp(options = {}) {
           response.send(buffer);
           return;
         } catch (geminiError) {
+          console.error("[tts:gemini]", geminiError?.message || geminiError);
           if (requiredProvider === "gemini") {
-            response.status(502).json({
-              error: `Gemini 음성 생성에 실패했습니다. ${geminiError?.message || "잠시 후 다시 시도해 주세요."}`
-            });
+            response.status(502).json({ error: "음성 생성에 실패했습니다. 잠시 후 다시 시도해 주세요." });
             return;
           }
 
@@ -710,9 +768,8 @@ export function createApp(options = {}) {
       }
       response.send(buffer);
     } catch (error) {
-      response.status(500).json({
-        error: error?.message || "음성 생성 중 오류가 발생했습니다."
-      });
+      console.error("[tts]", error?.message || error);
+      response.status(500).json({ error: "음성 생성 중 오류가 발생했습니다." });
     }
   });
 

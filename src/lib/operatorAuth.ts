@@ -30,3 +30,26 @@ export async function signInOperator(email: string, password: string): Promise<v
 export async function signOutOperator(): Promise<void> {
   await signOut(auth());
 }
+
+// 현재 로그인한 운영자의 Firebase ID 토큰. 비용 유발 API 호출 시 Bearer로 첨부한다.
+export async function currentIdToken(): Promise<string | null> {
+  const user = auth().currentUser;
+  if (!user) {
+    return null;
+  }
+  try {
+    return await user.getIdToken();
+  } catch {
+    return null;
+  }
+}
+
+// ID 토큰을 Authorization 헤더에 실어 fetch한다 (스태프 전용 API용).
+export async function authedFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  const token = await currentIdToken();
+  const headers = new Headers(init.headers || {});
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+  return fetch(input, { ...init, headers });
+}

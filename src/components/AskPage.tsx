@@ -178,6 +178,11 @@ export function AskPage() {
         <button type="submit" className="ask-submit" disabled={phase === "submitting"}>
           {phase === "submitting" ? "전송 중…" : "질문 보내기"}
         </button>
+
+        <p className="ask-privacy">
+          입력하신 닉네임·소속·질문은 행사 진행 목적으로만 쓰이며 행사 종료 후 삭제됩니다.
+          개인을 식별할 수 있는 실명·연락처는 적지 말아 주세요.
+        </p>
       </form>
     </main>
   );

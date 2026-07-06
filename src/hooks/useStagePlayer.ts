@@ -11,6 +11,7 @@ import {
 import { captionTimesFromAudioSamples } from "../lib/captionAudioSync";
 import { speakingFaceCount } from "../lib/robotFaces";
 import type { RobotState } from "../types";
+import { authedFetch } from "../lib/operatorAuth";
 
 // 무대 재생은 Gemini(Leda) 고정. 운영자 최종 결정 음색이며, 서버 기본과 일치.
 // (엔진/음색 원격 선택이 필요해지면 Firestore control 문서로 확장 가능)
@@ -172,7 +173,7 @@ export function useStagePlayer(): StagePlayer {
     }
 
     const promise = (async () => {
-      const response = await fetch("/api/tts", {
+      const response = await authedFetch("/api/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -150,7 +150,11 @@ export default function App() {
   }
 
   if (path === "/stage-rehearsal") {
-    return <StageScreen />;
+    return (
+      <OperatorGate screenName="무대 리허설">
+        <StageScreen />
+      </OperatorGate>
+    );
   }
 
   if (path === "/operator") {
@@ -162,8 +166,17 @@ export default function App() {
   }
 
   if (path === "/operator-rehearsal") {
-    return <OperatorScreen />;
+    return (
+      <OperatorGate screenName="운영 리허설">
+        <OperatorScreen />
+      </OperatorGate>
+    );
   }
 
-  return <DemoScreen />;
+  // 내부 리허설 화면도 비용 유발 API를 호출하므로 로그인 뒤에 둔다.
+  return (
+    <OperatorGate screenName="리허설">
+      <DemoScreen />
+    </OperatorGate>
+  );
 }

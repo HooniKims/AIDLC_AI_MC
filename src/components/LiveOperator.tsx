@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isFirebaseConfigured } from "../lib/firebase";
 import { plainMcCopy } from "../lib/mcFlow";
+import { authedFetch } from "../lib/operatorAuth";
 import {
   approveQuestion,
   ensureControl,
@@ -23,7 +24,7 @@ function byCreatedAt(a: LiveQuestion, b: LiveQuestion) {
 }
 
 async function generateAnswerText(questionText: string): Promise<string> {
-  const response = await fetch("/api/generate-answer", {
+  const response = await authedFetch("/api/generate-answer", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ question: questionText })
@@ -137,7 +138,7 @@ export function LiveOperator() {
   }, []);
 
   const handleReset = useCallback(() => {
-    if (!window.confirm("현재 큐를 비우고 새 세션을 시작할까요? 무대도 초기화됩니다.")) {
+    if (!window.confirm("현재 큐의 모든 질문(닉네임·소속 포함)을 영구 삭제하고 새 세션을 시작할까요? 무대도 초기화됩니다.")) {
       return;
     }
     resetSession()

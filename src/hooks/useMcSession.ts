@@ -12,6 +12,7 @@ import {
 import { captionTimesFromAudioSamples } from "../lib/captionAudioSync";
 import { speakingFaceCount } from "../lib/robotFaces";
 import type { AudienceQuestion, RobotState } from "../types";
+import { authedFetch } from "../lib/operatorAuth";
 
 const defaultGreeting =
   "안녕하세요. 저는 디지털 러닝 콘페스타의 AI MC입니다. 여러분의 질문을 골라 담아 무대에서 또렷하게 전해드릴게요.";
@@ -264,7 +265,7 @@ export function useMcSession() {
     const segments = [cleanText];
     const promise = Promise.all(
       segments.map(async (segment) => {
-        const response = await fetch("/api/tts", {
+        const response = await authedFetch("/api/tts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -437,7 +438,7 @@ export function useMcSession() {
     setError("");
 
     try {
-      const response = await fetch("/api/generate-answer", {
+      const response = await authedFetch("/api/generate-answer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question })

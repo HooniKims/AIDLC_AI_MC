@@ -345,7 +345,9 @@ describe("AI MC API", () => {
       .send({ text: "안녕하세요.", geminiVoice: "Leda", requireProvider: "gemini" })
       .expect(502);
 
-    expect(response.body.error).toContain("quota");
+    // 에러 상세(quota 등)는 로그로만 남기고 클라이언트엔 일반 메시지
+    expect(response.body.error).toContain("음성 생성에 실패");
+    expect(response.body.error).not.toContain("quota");
   });
 
   it("retries Gemini TTS rate limits before failing", async () => {
@@ -567,7 +569,7 @@ describe("AI MC API", () => {
       .send({ text: "안녕하세요. AI MC입니다.", geminiVoice: "Leda", requireProvider: "gemini" })
       .expect(502);
 
-    expect(response.body.error).toContain("Gemini");
+    expect(response.body.error).toContain("음성 생성에 실패");
     expect(openai.audio.speech.create).not.toHaveBeenCalled();
   });
 

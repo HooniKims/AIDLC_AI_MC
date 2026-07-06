@@ -22,7 +22,8 @@ service cloud.firestore {
 
       // 승인/거절/답변 저장/방송완료 표시는 운영자 전용
       allow update: if request.auth != null;
-      allow delete: if false;
+      // 개인정보(닉네임·소속) 삭제도 운영자 전용 (세션 리셋·개별 삭제)
+      allow delete: if request.auth != null;
     }
 
     match /control/{docId} {

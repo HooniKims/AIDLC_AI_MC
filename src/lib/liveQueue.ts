@@ -1,8 +1,10 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
+  getDocs,
   increment,
   onSnapshot,
   query,
@@ -11,6 +13,7 @@ import {
   Timestamp,
   updateDoc,
   where,
+  writeBatch,
   type DocumentData
 } from "firebase/firestore";
 import { getDb } from "./firebase";
@@ -103,8 +106,27 @@ export function watchControl(callback: (control: LiveControl | null) => void): (
   });
 }
 
-// 새 세션으로 초기화한다. 이전 질문은 sessionId가 달라져 큐에서 사라진다(데이터는 보존).
+// 세션의 모든 질문 문서를 삭제한다 (닉네임·소속 등 개인정보 정리용).
+async function deleteAllQuestions(): Promise<number> {
+  const snapshot = await getDocs(collection(getDb(), QUESTIONS));
+  let deleted = 0;
+  const docs = snapshot.docs;
+  // Firestore 배치 한도(500) 단위로 나눠 삭제
+  for (let i = 0; i < docs.length; i += 400) {
+    const batch = writeBatch(getDb());
+    for (const docSnap of docs.slice(i, i + 400)) {
+      batch.delete(docSnap.ref);
+      deleted += 1;
+    }
+    await batch.commit();
+  }
+  return deleted;
+}
+
+// 새 세션으로 초기화하고, 개인정보(참가자 질문)를 즉시 삭제한다.
+// 행사 종료·리허설 종료 시 개인정보를 남기지 않기 위한 경로.
 export async function resetSession(): Promise<string> {
+  await deleteAllQuestions();
   const sessionId = `s-${Date.now()}`;
   await setDoc(controlRef(), {
     sessionId,
@@ -113,6 +135,11 @@ export async function resetSession(): Promise<string> {
     updatedAt: serverTimestamp()
   });
   return sessionId;
+}
+
+// 단일 질문 삭제 (운영자가 개별 항목을 완전히 지울 때).
+export async function deleteQuestion(id: string): Promise<void> {
+  await deleteDoc(doc(getDb(), QUESTIONS, id));
 }
 
 export interface QuestionSubmission {
