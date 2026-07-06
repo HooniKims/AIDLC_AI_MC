@@ -52,7 +52,9 @@ export function OperatorGate({ screenName, children }: OperatorGateProps) {
     setSubmitting(true);
     setError("");
     try {
-      await signInOperator(email, password);
+      // 한글 IME가 남긴 전각 문자·공백을 정규화해 로그인 실패를 막는다
+      const cleanEmail = email.normalize("NFKC").replace(/\s+/g, "");
+      await signInOperator(cleanEmail, password);
     } catch {
       setError("로그인에 실패했습니다. 이메일과 비밀번호를 확인해 주세요.");
     } finally {
@@ -68,10 +70,16 @@ export function OperatorGate({ screenName, children }: OperatorGateProps) {
         <label className="ask-field">
           <span>운영자 이메일</span>
           <input
-            type="email"
+            // type="email" 대신 text + inputMode로: 한글 IME/전각문자 때문에
+            // 브라우저가 "@ 뒤에 기호" 오류로 막던 문제 방지. 실제 검증은 Firebase가 함.
+            type="text"
+            inputMode="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             autoComplete="username"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
             aria-label="운영자 이메일"
           />
         </label>
