@@ -9,22 +9,30 @@ const defaultGreeting =
 
 const geminiVoiceStorageKey = "ai-mc-gemini-voice";
 const ttsEngineStorageKey = "ai-mc-tts-engine";
-// v2: 기본 음색이 Jessica로 바뀌면서 예전 저장값을 무시하도록 키를 올림
-const elevenVoiceStorageKey = "ai-mc-eleven-voice-v2";
+// v3: 기본 음색이 커스텀 AI 로봇(디디 A)으로 바뀌면서 예전 저장값을 무시하도록 키를 올림
+const elevenVoiceStorageKey = "ai-mc-eleven-voice-v3";
 
 export type TtsEngine = "elevenlabs" | "gemini";
 export const defaultTtsEngine: TtsEngine = "elevenlabs";
 
-// ElevenLabs 음색 (한국어 라이브러리 음색은 유료 플랜 필요)
+// ElevenLabs 음색 (라이브러리·커스텀 음색은 유료 플랜 필요)
+// 샘플: assets/tts-samples/ (voice-design/dd-robot-*.mp3, robot-*.mp3, korean-*.mp3)
 export const elevenVoiceOptions = [
-  { value: "cgSgspJ2msm6clMCkdW9", label: "Jessica · 발랄하고 밝음 (기본)" },
-  { value: "bQlkYuipD5BHEhntA5iz", label: "JY · 상큼 발랄 업비트" },
+  { value: "14DagiyIoXWe1tnLN3CZ", label: "디디 A · 커스텀 AI 로봇 소녀 (기본)" },
+  { value: "VUDlnN1Zu66MXg4RX6c9", label: "디디 B · 커스텀 AI 로봇 소녀" },
+  { value: "vK7Rpg2yEMRHLO0k0Lf8", label: "디디 C · 커스텀 AI 로봇 소녀" },
+  { value: "weA4Q36twV5kwSaTEL0Q", label: "Eva · 미래형 로봇 도우미" },
+  { value: "MEJe6hPrI48Kt2lFuVe3", label: "Yumi · 귀엽고 로봇틱" },
+  { value: "4Bk8kSmfWn7kN1am2GME", label: "Dorey · 로봇 아이 캐릭터" },
+  { value: "ee2pDOfqzj2pBerZvUCH", label: "Rocco · 기계음 로봇" },
+  { value: "bQlkYuipD5BHEhntA5iz", label: "JY · 상큼 발랄 업비트 (한국어)" },
   { value: "OSwaPSNdfituxkWcjlkR", label: "Kano · 귀여운 애니 캐릭터" },
-  { value: "Lb7qkOn5hF8p7qfCDH8q", label: "Annie · 부드럽고 귀여움" },
-  { value: "6aXW46RTUz6Y2lkBGQ1a", label: "Farida · 활기차고 밝음" }
+  { value: "Lb7qkOn5hF8p7qfCDH8q", label: "Annie · 부드럽고 귀여움 (한국어)" },
+  { value: "6aXW46RTUz6Y2lkBGQ1a", label: "Farida · 활기차고 밝음" },
+  { value: "cgSgspJ2msm6clMCkdW9", label: "Jessica · 발랄하고 밝음" }
 ] as const;
 
-export const defaultElevenVoiceId = elevenVoiceOptions[0].value; // Jessica
+export const defaultElevenVoiceId = elevenVoiceOptions[0].value; // 디디 A (커스텀 AI 로봇)
 
 const engineLabels: Record<TtsEngine, string> = {
   elevenlabs: "ElevenLabs",
@@ -161,11 +169,13 @@ export function useMcSession() {
     // 비중으로 근사한다. 말이 끝나기 전에 자막이 먼저 지나가지 않는다.
     const text = plainMcCopy(approvedAnswer);
     setCaptionCueIndex(0);
+    let audioSeen = false;
     let elapsedMs = 0;
     const tickMs = 120;
     const id = window.setInterval(() => {
       const audio = playingAudioRef.current;
       if (audio) {
+        audioSeen = true;
         const captionTimes = speechAssetRef.current?.captionTimes;
         if (captionTimes && captionTimes.length > 0) {
           setCaptionCueIndex(captionCueIndexForTimes(captionTimes, audio.currentTime));
@@ -177,7 +187,14 @@ export function useMcSession() {
         }
       }
 
-      // 오디오 정보를 못 얻는 환경(테스트·오류)에서는 기존 시간 기반으로 진행
+      if (!audioSeen) {
+        // 아직 음성이 준비/재생되기 전("준비 중 · 말하기")에는 첫 문장에 고정한다.
+        // 여기서 타이머로 넘겨버리면 말보다 자막이 먼저 지나가는 사고가 난다.
+        setCaptionCueIndex(0);
+        return;
+      }
+
+      // 오디오가 재생됐지만 시간 정보를 못 얻는 환경(테스트·일부 브라우저)만 시간 기반 진행
       elapsedMs += tickMs;
       setCaptionCueIndex(Math.floor(elapsedMs / captionCueIntervalMs));
     }, tickMs);

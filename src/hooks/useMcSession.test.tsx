@@ -74,7 +74,7 @@ describe("useMcSession speech preparation", () => {
     const preparedCall = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     const requestBody = JSON.parse(String(preparedCall[1].body));
     expect(requestBody.requireProvider).toBeUndefined();
-    expect(requestBody.elevenVoice).toBe("cgSgspJ2msm6clMCkdW9");
+    expect(requestBody.elevenVoice).toBe("14DagiyIoXWe1tnLN3CZ");
 
     await act(async () => {
       await result.current.speak();

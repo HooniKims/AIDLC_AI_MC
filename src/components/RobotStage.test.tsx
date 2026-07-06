@@ -40,7 +40,7 @@ describe("RobotStage captions", () => {
     expect(caption?.textContent).not.toContain("세 번째 안내입니다.");
   });
 
-  it("does not show the full answer after speaking captions are exhausted", () => {
+  it("keeps the final sentence visible when the cue index overflows", () => {
     const { container } = render(
       <RobotStage
         state="speaking"
@@ -49,7 +49,9 @@ describe("RobotStage captions", () => {
       />
     );
 
-    expect(container.querySelector(".stage-answer")).toBeNull();
+    const caption = container.querySelector(".stage-answer");
+    expect(caption?.textContent).toContain("세 번째 안내입니다.");
+    expect(caption?.textContent).not.toContain("첫 번째 안내입니다.");
   });
 
   it("does not show the full approved answer while idle", () => {

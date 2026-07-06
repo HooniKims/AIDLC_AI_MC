@@ -77,7 +77,7 @@ function hasGeminiApiKey(env) {
   return Boolean(envValue(env, "GEMINI_API_KEY", "").trim());
 }
 
-const defaultElevenLabsVoiceId = "cgSgspJ2msm6clMCkdW9"; // Jessica · 발랄하고 밝은 톤
+const defaultElevenLabsVoiceId = "14DagiyIoXWe1tnLN3CZ"; // 디디 A · 커스텀 AI 로봇 소녀
 
 function hasElevenLabsApiKey(env) {
   return Boolean(envValue(env, "ELEVENLABS_API_KEY", "").trim());

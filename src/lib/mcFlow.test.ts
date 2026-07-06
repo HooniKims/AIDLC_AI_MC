@@ -82,9 +82,10 @@ describe("mcFlow", () => {
     expect(captionCueIndexForProgress(text, 2)).toBe(2);
   });
 
-  it("hides speaking subtitles after the final sentence", () => {
+  it("keeps the final sentence on screen when the cue overflows while speaking", () => {
     const answer = "첫 번째 안내입니다. 두 번째 안내입니다. 세 번째 안내입니다.";
 
-    expect(stageCaptionLinesForKorean(answer, { isSpeaking: true, cueIndex: 3, maxLines: 2 })).toEqual([]);
+    expect(stageCaptionLinesForKorean(answer, { isSpeaking: true, cueIndex: 3, maxLines: 2 })).toEqual(["세 번째 안내입니다."]);
+    expect(stageCaptionLinesForKorean(answer, { isSpeaking: true, cueIndex: 99, maxLines: 2 })).toEqual(["세 번째 안내입니다."]);
   });
 });

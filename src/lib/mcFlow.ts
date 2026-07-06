@@ -100,8 +100,12 @@ interface StageCaptionOptions {
 export function stageCaptionLinesForKorean(text: string, options: StageCaptionOptions = {}): string[] {
   if (options.isSpeaking) {
     const cues = stageSentenceCuesForKorean(text, options.maxChars);
-    const cueIndex = Math.max(0, Math.floor(options.cueIndex ?? 0));
-    return cues[cueIndex] || [];
+    if (cues.length === 0) {
+      return [];
+    }
+    // 말하는 동안 자막이 사라지면 안 된다: 큐가 넘쳐도 마지막 문장을 유지
+    const cueIndex = Math.min(Math.max(0, Math.floor(options.cueIndex ?? 0)), cues.length - 1);
+    return cues[cueIndex];
   }
 
   return stageLinesForKorean(text, options.maxChars);
