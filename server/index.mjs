@@ -385,17 +385,48 @@ async function createGeminiSpeechWithRetry({ env, fetchImpl, text, voice, retryD
   throw lastError;
 }
 
-// 클라이언트(mcFlow)의 자막 큐 분할과 같은 규칙으로 문장 끝 위치(문자 인덱스)를 찾는다
+// 클라이언트(mcFlow)의 자막 큐 분할·그룹핑과 같은 규칙으로
+// 각 자막 큐의 마지막 문자 인덱스를 찾는다.
+// ⚠️ src/lib/mcFlow.ts의 minCueChars/그룹핑 규칙과 반드시 일치해야 한다.
+const minCueChars = 10;
+
 export function sentenceEndIndices(text) {
-  const indices = [];
+  const sentences = [];
   const pattern = /[^.!?。！？]+[.!?。！？]?/g;
   let match;
   while ((match = pattern.exec(text)) !== null) {
-    if (match[0].trim()) {
-      indices.push(match.index + match[0].length - 1);
+    const trimmed = match[0].trim();
+    if (trimmed) {
+      sentences.push({
+        endIndex: match.index + match[0].length - 1,
+        // 클라이언트는 공백을 하나로 접은 문장 길이를 기준으로 그룹핑한다
+        length: trimmed.replace(/\s+/g, " ").length
+      });
     }
   }
-  return indices;
+
+  // 짧은 문장을 다음 문장과 묶는다 (클라이언트 groupSentencesForCues와 동일)
+  const boundaries = [];
+  let currentLength = 0;
+  let currentEnd = -1;
+  for (const sentence of sentences) {
+    currentLength += (currentLength > 0 ? 1 : 0) + sentence.length;
+    currentEnd = sentence.endIndex;
+    if (currentLength >= minCueChars) {
+      boundaries.push(currentEnd);
+      currentLength = 0;
+      currentEnd = -1;
+    }
+  }
+  if (currentEnd >= 0) {
+    if (boundaries.length > 0) {
+      boundaries[boundaries.length - 1] = currentEnd;
+    } else {
+      boundaries.push(currentEnd);
+    }
+  }
+
+  return boundaries;
 }
 
 // ElevenLabs alignment(글자별 종료 시각)에서 문장별 발화 종료 시각(초)을 계산한다

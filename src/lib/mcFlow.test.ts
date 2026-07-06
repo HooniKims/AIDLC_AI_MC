@@ -71,15 +71,27 @@ describe("mcFlow", () => {
   });
 
   it("maps audio progress to caption cues weighted by sentence length", () => {
-    const text = "\uccab \ubb38\uc7a5. \ub450 \ubc88\uc9f8 \ubb38\uc7a5\uc740 \ud6e8\uc52c \ub354 \uae38\uc5b4\uc11c \uc624\ub798 \uc77d\ub294\ub2e4. \ub05d.";
+    // 짧은 감탄 문장("안녕하세요!")은 다음 문장과 묶여 하나의 큐가 된다
+    const text = "안녕하세요! 정말 반가워요. 오늘 행사는 코엑스 마곡 르웨스트홀에서 열려요. 궁금한 건 뭐든지 물어봐 주세요!";
     expect(captionCueCount(text)).toBe(3);
     expect(captionCueIndexForProgress(text, 0)).toBe(0);
-    // \uc9e7\uc740 \uccab \ubb38\uc7a5\uc740 \uae08\ubc29 \uc9c0\ub098\uac00\uace0 \uae34 \ub450 \ubc88\uc9f8 \ubb38\uc7a5\uc774 \uc911\ubc18 \ub300\ubd80\ubd84\uc744 \ucc28\uc9c0\ud55c\ub2e4
     expect(captionCueIndexForProgress(text, 0.5)).toBe(1);
     expect(captionCueIndexForProgress(text, 0.99)).toBe(2);
-    // \ubc94\uc704 \ubc16 \uac12\uc740 \uc591\ub05d\uc73c\ub85c \ud074\ub7a8\ud504
+    // 범위 밖 값은 양끝으로 클램프
     expect(captionCueIndexForProgress(text, -1)).toBe(0);
     expect(captionCueIndexForProgress(text, 2)).toBe(2);
+  });
+
+  it("merges short exclamation sentences into neighbor cues", () => {
+    // "띠링!" 같은 짧은 문장이 단독 자막으로 휙 지나가지 않는다
+    const text = "장소는 코엑스 마곡이에요. 띠링! 프로그램도 안내해드릴게요.";
+    const cues = [0, 1, 2].map((i) =>
+      stageCaptionLinesForKorean(text, { isSpeaking: true, cueIndex: i }).join(" ")
+    );
+    expect(captionCueCount(text)).toBe(2);
+    expect(cues[0]).toContain("코엑스 마곡");
+    expect(cues[1]).toContain("띠링!");
+    expect(cues[1]).toContain("프로그램도 안내해드릴게요.");
   });
 
   it("keeps the final sentence on screen when the cue overflows while speaking", () => {

@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { sampleQuestions } from "../data/sampleQuestions";
-import { captionCueIndexForProgress, captionCueIndexForTimes, nextLipFrame, plainMcCopy } from "../lib/mcFlow";
+import {
+  captionCueCount,
+  captionCueIndexForProgress,
+  captionCueIndexForTimes,
+  nextLipFrame,
+  plainMcCopy
+} from "../lib/mcFlow";
 import { speakingFaceCount } from "../lib/robotFaces";
 import type { AudienceQuestion, RobotState } from "../types";
 
@@ -8,12 +14,13 @@ const defaultGreeting =
   "안녕하세요. 저는 디지털 러닝 콘페스타의 AI MC입니다. 여러분의 질문을 골라 담아 무대에서 또렷하게 전해드릴게요.";
 
 const geminiVoiceStorageKey = "ai-mc-gemini-voice";
-const ttsEngineStorageKey = "ai-mc-tts-engine";
+// v2: 기본 엔진이 Gemini(Leda)로 돌아오면서 예전 저장값을 무시하도록 키를 올림
+const ttsEngineStorageKey = "ai-mc-tts-engine-v2";
 // v3: 기본 음색이 커스텀 AI 로봇(디디 A)으로 바뀌면서 예전 저장값을 무시하도록 키를 올림
 const elevenVoiceStorageKey = "ai-mc-eleven-voice-v3";
 
 export type TtsEngine = "elevenlabs" | "gemini";
-export const defaultTtsEngine: TtsEngine = "elevenlabs";
+export const defaultTtsEngine: TtsEngine = "gemini";
 
 // ElevenLabs 음색 (라이브러리·커스텀 음색은 유료 플랜 필요)
 // 샘플: assets/tts-samples/ (voice-design/dd-robot-*.mp3, robot-*.mp3, korean-*.mp3)
@@ -109,7 +116,7 @@ export function useMcSession() {
   const [geminiVoice, setGeminiVoiceState] = useState(() => readStoredValue(geminiVoiceStorageKey, "Leda"));
   const [ttsEngine, setTtsEngineState] = useState<TtsEngine>(() => {
     const stored = readStoredValue(ttsEngineStorageKey, defaultTtsEngine);
-    return stored === "gemini" ? "gemini" : "elevenlabs";
+    return stored === "elevenlabs" ? "elevenlabs" : "gemini";
   });
   const [elevenVoice, setElevenVoiceState] = useState(() => {
     const stored = readStoredValue(elevenVoiceStorageKey, defaultElevenVoiceId);
@@ -194,9 +201,11 @@ export function useMcSession() {
         return;
       }
 
-      // 오디오가 재생됐지만 시간 정보를 못 얻는 환경(테스트·일부 브라우저)만 시간 기반 진행
+      // 오디오가 재생됐지만 시간 정보를 못 얻는 환경(테스트·일부 브라우저)만 시간 기반 진행.
+      // 큐 개수를 넘지 않게 클램프해 마지막 문장이 유지되도록 한다.
       elapsedMs += tickMs;
-      setCaptionCueIndex(Math.floor(elapsedMs / captionCueIntervalMs));
+      const maxCue = Math.max(0, captionCueCount(text) - 1);
+      setCaptionCueIndex(Math.min(Math.floor(elapsedMs / captionCueIntervalMs), maxCue));
     }, tickMs);
 
     return () => window.clearInterval(id);

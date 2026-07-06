@@ -12,8 +12,8 @@ const geminiVoiceOptions = [
 ];
 
 const engineOptions: { value: TtsEngine; label: string }[] = [
-  { value: "elevenlabs", label: "ElevenLabs (기본 · Gemini 자동 폴백)" },
-  { value: "gemini", label: "Gemini 고정" }
+  { value: "gemini", label: "Gemini (기본 · Leda)" },
+  { value: "elevenlabs", label: "ElevenLabs (Gemini 자동 폴백)" }
 ];
 
 interface OperatorPanelProps {

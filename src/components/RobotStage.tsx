@@ -60,7 +60,7 @@ export function RobotStage({
         {question ? <p className="stage-question">Q. {question}</p> : null}
         {shouldShowAnswer ? (
           <p
-            key={captionCueIndex}
+            key={answerLines.join("|")}
             className="stage-answer stage-answer--speaking"
             data-caption-cue={captionCueIndex}
           >

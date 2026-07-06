@@ -37,7 +37,7 @@ describe("useMcSession speech preparation", () => {
         status: 200,
         headers: {
           "Content-Type": "audio/wav",
-          "X-AI-MC-TTS-Provider": "elevenlabs"
+          "X-AI-MC-TTS-Provider": "gemini"
         }
       });
     });
@@ -73,8 +73,9 @@ describe("useMcSession speech preparation", () => {
     );
     const preparedCall = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     const requestBody = JSON.parse(String(preparedCall[1].body));
-    expect(requestBody.requireProvider).toBeUndefined();
-    expect(requestBody.elevenVoice).toBe("14DagiyIoXWe1tnLN3CZ");
+    expect(requestBody.requireProvider).toBe("gemini");
+    expect(requestBody.geminiVoice).toBe("Leda");
+    expect(requestBody.elevenVoice).toBeUndefined();
 
     await act(async () => {
       await result.current.speak();
@@ -99,7 +100,7 @@ describe("useMcSession speech preparation", () => {
         status: 200,
         headers: {
           "Content-Type": "audio/wav",
-          "X-AI-MC-TTS-Provider": "elevenlabs"
+          "X-AI-MC-TTS-Provider": "gemini"
         }
       });
     });
@@ -135,7 +136,7 @@ describe("useMcSession speech preparation", () => {
         status: 200,
         headers: {
           "Content-Type": "audio/wav",
-          "X-AI-MC-TTS-Provider": "elevenlabs"
+          "X-AI-MC-TTS-Provider": "gemini"
         }
       });
     });
@@ -158,14 +159,14 @@ describe("useMcSession speech preparation", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const firstCall = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(JSON.parse(String(firstCall[1].body)).text).toBe("첫 문장입니다. 두 번째 문장입니다.");
-    expect(JSON.parse(String(firstCall[1].body)).requireProvider).toBeUndefined();
+    expect(JSON.parse(String(firstCall[1].body)).requireProvider).toBe("gemini");
   });
 
   it("does not play audio when the engine-required request fails", async () => {
     const fetchMock = vi
       .fn()
       .mockImplementation(async () =>
-        new Response(JSON.stringify({ error: "ElevenLabs 음성 생성에 실패했습니다. quota" }), {
+        new Response(JSON.stringify({ error: "Gemini 음성 생성에 실패했습니다. quota" }), {
           status: 502,
           headers: {
             "Content-Type": "application/json"
@@ -197,6 +198,6 @@ describe("useMcSession speech preparation", () => {
     });
 
     expect(MockAudio.instances).toHaveLength(0);
-    expect(result.current.error).toContain("ElevenLabs 음성 생성에 실패했습니다");
+    expect(result.current.error).toContain("Gemini 음성 생성에 실패했습니다");
   });
 });

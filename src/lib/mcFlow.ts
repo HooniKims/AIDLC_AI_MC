@@ -75,6 +75,37 @@ export function stageLinesForKorean(text: string, maxChars = 26): string[] {
     );
 }
 
+// 이 값보다 짧은 문장("띠링!", "우와!" 등)은 독립 자막이 되면 1초도 안 되어
+// 휙 지나가버리므로 다음 문장과 묶어서 한 자막으로 보여준다.
+// ⚠️ 서버(server/index.mjs)의 그룹핑 규칙과 반드시 일치해야 타임스탬프가 맞는다.
+const minCueChars = 10;
+
+export function groupSentencesForCues(sentences: string[]): string[][] {
+  const groups: string[][] = [];
+  let current: string[] = [];
+  let currentLength = 0;
+
+  for (const sentence of sentences) {
+    current.push(sentence);
+    currentLength += (currentLength > 0 ? 1 : 0) + sentence.length;
+    if (currentLength >= minCueChars) {
+      groups.push(current);
+      current = [];
+      currentLength = 0;
+    }
+  }
+
+  if (current.length > 0) {
+    if (groups.length > 0) {
+      groups[groups.length - 1].push(...current);
+    } else {
+      groups.push(current);
+    }
+  }
+
+  return groups;
+}
+
 function stageSentenceCuesForKorean(text: string, maxChars = 26): string[][] {
   const normalized = protectKoreanStagePhrases(plainMcCopy(text).replace(/\s+/g, " ").trim());
   if (!normalized) {
@@ -82,12 +113,11 @@ function stageSentenceCuesForKorean(text: string, maxChars = 26): string[][] {
   }
 
   const sentenceMatches = normalized.match(/[^.!?。！？]+[.!?。！？]?/g) || [normalized];
-  return sentenceMatches
-    .map((sentence) => sentence.trim())
-    .filter(Boolean)
-    .map((sentence) =>
-      sentence.length > maxChars ? splitLongKoreanSentence(sentence, maxChars) : [sentence]
-    );
+  const sentences = sentenceMatches.map((sentence) => sentence.trim()).filter(Boolean);
+  return groupSentencesForCues(sentences).map((group) => {
+    const joined = group.join(" ");
+    return joined.length > maxChars ? splitLongKoreanSentence(joined, maxChars) : [joined];
+  });
 }
 
 interface StageCaptionOptions {
@@ -142,7 +172,9 @@ export function captionCueIndexForProgress(text: string, progress: number): numb
 
   const lengths = cues.map((lines) => Math.max(1, lines.join(" ").length));
   const total = lengths.reduce((sum, length) => sum + length, 0);
-  const clamped = Math.min(Math.max(progress, 0), 1);
+  // 근사 방식은 문장 사이 쉼 때문에 이르게 넘어가기 쉽다.
+  // 자막은 이르게 사라지는 것보다 살짝 늦게 넘어가는 쪽이 자연스러우므로 3% 늦춘다.
+  const clamped = Math.min(Math.max(progress - 0.03, 0), 1);
   const target = clamped * total;
 
   let cumulative = 0;
