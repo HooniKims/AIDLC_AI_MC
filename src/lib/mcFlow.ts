@@ -145,6 +145,25 @@ export function captionCueCount(text: string): number {
   return stageSentenceCuesForKorean(text).length;
 }
 
+// 큐 경계의 누적 글자 비율(0~1) 목록. 큐가 N개면 N-1개를 돌려준다.
+// 오디오 무음 분석이 문장 경계를 찾을 때 "대략 이 근처" 사전 정보로 쓴다.
+export function captionCueBoundaryFractions(text: string): number[] {
+  const cues = stageSentenceCuesForKorean(text);
+  if (cues.length < 2) {
+    return [];
+  }
+
+  const lengths = cues.map((lines) => Math.max(1, lines.join(" ").length));
+  const total = lengths.reduce((sum, length) => sum + length, 0);
+  const fractions: number[] = [];
+  let cumulative = 0;
+  for (let index = 0; index < lengths.length - 1; index++) {
+    cumulative += lengths[index];
+    fractions.push(cumulative / total);
+  }
+  return fractions;
+}
+
 // TTS 응답의 X-AI-MC-Caption-Times 헤더를 파싱한다.
 // 주의: "".split(",")은 [""]이고 Number("")은 0이므로, 빈 헤더(Gemini 등)가
 // [0]이라는 가짜 타임스탬프가 되어 자막을 첫 문장에 가둬버린다. 빈 값은 null.

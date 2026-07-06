@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { sampleQuestions } from "../data/sampleQuestions";
 import {
+  captionCueBoundaryFractions,
   captionCueCount,
   captionCueIndexForProgress,
   captionCueIndexForTimes,
@@ -8,6 +9,7 @@ import {
   parseCaptionTimesHeader,
   plainMcCopy
 } from "../lib/mcFlow";
+import { captionTimesFromAudioSamples } from "../lib/captionAudioSync";
 import { speakingFaceCount } from "../lib/robotFaces";
 import type { AudienceQuestion, RobotState } from "../types";
 
@@ -281,6 +283,7 @@ export function useMcSession() {
 
         const blob = await response.blob();
         return {
+          blob,
           url: URL.createObjectURL(blob),
           provider: response.headers.get("X-AI-MC-TTS-Provider") || "",
           captionTimes: parseCaptionTimesHeader(response.headers.get("X-AI-MC-Caption-Times"))
@@ -297,7 +300,7 @@ export function useMcSession() {
         );
       }
 
-      const asset = {
+      const asset: SpeechAsset = {
         key,
         urls: segments.map((segment) => segment.url),
         provider,
@@ -305,6 +308,18 @@ export function useMcSession() {
       };
 
       replaceSpeechAsset(asset);
+
+      // 서버 타임스탬프가 없으면(Gemini 등) 오디오 파형의 무음 구간을 분석해
+      // 실제 발화 기준 자막 전환 시각을 만든다. 분석이 끝나는 대로 자막이
+      // 근사 방식에서 파형 기준으로 자동 승격된다.
+      const firstBlob = segments[0]?.blob;
+      if (!asset.captionTimes && firstBlob) {
+        void analyzeCaptionTimesFromBlob(firstBlob, cleanText).then((times) => {
+          if (times && speechAssetRef.current?.key === key) {
+            speechAssetRef.current.captionTimes = times;
+          }
+        });
+      }
       return asset;
     });
 
@@ -462,6 +477,25 @@ export function useMcSession() {
   function finishSpeaking() {
     setIsSpeaking(false);
     setRobotState("idle");
+  }
+
+  // 오디오 blob을 디코딩해 무음 기반 자막 전환 시각을 계산한다 (실패 시 null → 근사 유지)
+  async function analyzeCaptionTimesFromBlob(blob: Blob, text: string): Promise<number[] | null> {
+    try {
+      if (typeof window === "undefined" || !("AudioContext" in window)) {
+        return null;
+      }
+      const fractions = captionCueBoundaryFractions(text);
+      if (fractions.length === 0) {
+        return null;
+      }
+      const context = audioContextRef.current ?? new AudioContext();
+      audioContextRef.current = context;
+      const decoded = await context.decodeAudioData(await blob.arrayBuffer());
+      return captionTimesFromAudioSamples(decoded.getChannelData(0), decoded.sampleRate, fractions, decoded.duration);
+    } catch {
+      return null;
+    }
   }
 
   // 재생 오디오에 WebAudio 분석기를 연결해 립싱크가 실제 음량을 따라가게 한다.
