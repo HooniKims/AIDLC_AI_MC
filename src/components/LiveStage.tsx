@@ -135,7 +135,11 @@ export function LiveStage() {
         captionCueIndex={player.captionCueIndex}
         variant="full"
       />
-      <aside className={`stage-qr ${player.isSpeaking ? "stage-qr--compact" : "stage-qr--idle"}`}>
+      <aside
+        // key로 상태 전환 시 재마운트해 위치는 점프, 페이드인만 재생 (자막 위 비행 방지)
+        key={player.isSpeaking ? "compact" : "idle"}
+        className={`stage-qr ${player.isSpeaking ? "stage-qr--compact" : "stage-qr--idle"}`}
+      >
         <QrCode value={askUrl()} size={player.isSpeaking ? 132 : 220} className="stage-qr__img" />
         <div className="stage-qr__caption">
           <strong>QR을 찍고 질문하기</strong>

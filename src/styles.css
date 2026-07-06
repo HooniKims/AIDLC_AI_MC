@@ -1257,7 +1257,18 @@ textarea:focus {
   background: rgba(253, 248, 255, 0.94);
   box-shadow: 0 12px 32px rgba(20, 10, 41, 0.35);
   backdrop-filter: blur(6px);
-  transition: all 0.4s ease;
+  /* 위치는 즉시 점프하고 페이드인만 한다 — 중앙→구석으로 '날아가는' 전환은
+     막 나타난 자막 위를 지나며 잠깐 가리므로 금지 */
+  animation: stage-qr-fade-in 0.35s ease both;
+}
+
+@keyframes stage-qr-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .stage-qr--idle {
@@ -1569,4 +1580,9 @@ textarea:focus {
 .live-btn:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+/* 라이브 무대: 말하는 동안 자막이 우하단 QR 영역을 침범하지 않게 폭을 예약 */
+.stage-screen--live .stage-answer {
+  max-width: min(920px, calc(100% - 480px));
 }
