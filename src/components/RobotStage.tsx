@@ -32,7 +32,10 @@ export function RobotStage({
     maxChars: variant === "full" ? 34 : 28,
     maxLines: 2
   });
-  const shouldShowAnswer = isSpeaking && answerLines.length > 0;
+  // 수동 글자수 분할 + CSS 자동 줄바꿈이 겹치면 어색한 이중 줄바꿈이 생긴다.
+  // 한 문단으로 합치고 줄바꿈은 CSS(keep-all + balance)에 맡긴다.
+  const answerText = answerLines.join(" ");
+  const shouldShowAnswer = isSpeaking && answerText.length > 0;
 
   return (
     <section className={`robot-stage robot-stage--${variant}`} aria-label="AI MC 무대">
@@ -60,13 +63,11 @@ export function RobotStage({
         {question ? <p className="stage-question">Q. {question}</p> : null}
         {shouldShowAnswer ? (
           <p
-            key={answerLines.join("|")}
+            key={answerText}
             className="stage-answer stage-answer--speaking"
             data-caption-cue={captionCueIndex}
           >
-            {answerLines.map((line) => (
-              <span key={line}>{line}</span>
-            ))}
+            {answerText}
           </p>
         ) : null}
       </div>

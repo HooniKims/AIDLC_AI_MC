@@ -35,6 +35,9 @@ export function LiveStage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [control, setControl] = useState<LiveControl | null>(null);
   const [questions, setQuestions] = useState<LiveQuestion[]>([]);
+  // 자동재생 정책: 페이지 로드 후 클릭이 한 번은 있어야 소리가 난다.
+  // 시작 버튼으로 상호작용을 먼저 확보해 방송 중 차단을 원천 방지한다.
+  const [started, setStarted] = useState(false);
   const lastNonceRef = useRef<number | null>(null);
   const handlingRef = useRef(false);
   const configured = isFirebaseConfigured();
@@ -181,10 +184,30 @@ export function LiveStage() {
         </div>
       ) : null}
 
-      {player.audioBlocked ? (
+      {player.audioBlocked && started ? (
         <button type="button" className="stage-audio-unlock" onClick={player.retryBlocked}>
           <strong>🔊 소리가 차단됐어요</strong>
           <span>화면을 한 번 클릭하면 답변을 재생해요</span>
+        </button>
+      ) : null}
+
+      {!started ? (
+        <button
+          type="button"
+          className="stage-start"
+          onClick={() => {
+            setStarted(true);
+            // 시작 전에 원격 재생이 왔다가 차단된 경우, 이 클릭(제스처)으로 즉시 재생
+            if (player.audioBlocked) {
+              player.retryBlocked();
+            }
+          }}
+        >
+          <span className="stage-start__icon" aria-hidden="true">
+            ▶
+          </span>
+          <strong>무대 시작하기</strong>
+          <span>클릭하면 소리가 켜지고 무대가 시작돼요</span>
         </button>
       ) : null}
     </main>
