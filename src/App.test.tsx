@@ -6,14 +6,6 @@ vi.mock("./components/Robot3D", () => ({
   Robot3D: () => <div className="robot-canvas" data-robot-3d="true" />
 }));
 
-// 라이브 화면은 Firebase에 붙지 않도록 데이터 계층을 모킹한다(라우팅·렌더만 검증).
-vi.mock("./lib/firebase", () => ({
-  isFirebaseConfigured: () => true,
-  getDb: () => {
-    throw new Error("not used in tests");
-  }
-}));
-
 // 게이트는 로그인된 운영자로 모킹 (라우팅·렌더만 검증)
 vi.mock("./lib/operatorAuth", () => ({
   watchOperatorAuth: (cb: (s: string) => void) => {
@@ -21,7 +13,17 @@ vi.mock("./lib/operatorAuth", () => ({
     return () => undefined;
   },
   signInOperator: () => Promise.resolve(),
-  signOutOperator: () => Promise.resolve()
+  signOutOperator: () => Promise.resolve(),
+  currentIdToken: () => Promise.resolve(null),
+  authedFetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, init)
+}));
+
+// 라이브 화면은 Firebase에 붙지 않도록 데이터 계층을 모킹한다.
+vi.mock("./lib/firebase", () => ({
+  isFirebaseConfigured: () => true,
+  getDb: () => {
+    throw new Error("not used in tests");
+  }
 }));
 
 vi.mock("./lib/liveQueue", () => ({
@@ -36,6 +38,7 @@ vi.mock("./lib/liveQueue", () => ({
   requestSpeak: () => Promise.resolve(),
   markSpoken: () => Promise.resolve(),
   reportStageStatus: () => Promise.resolve(),
+  markAudioReady: () => Promise.resolve(),
   clearAllQuestions: () => Promise.resolve(0),
   deleteQuestion: () => Promise.resolve(),
   submitQuestion: () => Promise.resolve()
@@ -47,11 +50,6 @@ function renderAt(path: string) {
 }
 
 describe("App routes", () => {
-  it("renders the internal demo screen", () => {
-    renderAt("/demo");
-    expect(screen.getByText("AI MC 리허설")).toBeInTheDocument();
-  });
-
   it("renders the live event stage screen", () => {
     renderAt("/stage");
     expect(screen.getByText("AI MC")).toBeInTheDocument();
@@ -59,6 +57,11 @@ describe("App routes", () => {
 
   it("renders the live operator console", () => {
     renderAt("/operator");
+    expect(screen.getByText("실시간 운영 콘솔")).toBeInTheDocument();
+  });
+
+  it("renders the operator console at the root path", () => {
+    renderAt("/");
     expect(screen.getByText("실시간 운영 콘솔")).toBeInTheDocument();
   });
 

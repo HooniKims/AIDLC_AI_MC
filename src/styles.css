@@ -1795,3 +1795,100 @@ textarea:focus {
 .stage-qr--compact .stage-qr__caption {
   max-width: 210px;
 }
+
+/* ===== 라이브 무대 모바일 대응 ===== */
+@media (max-width: 640px) {
+  /* 구형 모바일 규칙(.robot-stage{min-height:520px})이 무대를 절반 높이로 눌러
+     자막·QR이 화면 중간에 뜨는 문제 → 라이브 무대는 항상 화면 전체 높이 */
+  .robot-stage--full {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  /* 로봇 중앙 정렬: left:12vw 데스크톱 규칙을 무효화.
+     transform은 idle 애니메이션이 쓰므로 left/right+margin으로 중앙을 잡는다 */
+  .robot-stage--full .robot-wrap {
+    left: 0;
+    right: 0;
+    margin: 0 auto;
+    /* 하단 중앙 QR 카드(top≈580px)와 겹치지 않게 로봇을 위로 */
+    bottom: 285px;
+    width: min(62vw, 270px);
+    min-width: 0;
+    /* 구형 모바일 규칙(.robot-wrap)의 translateX(-50%)가 중앙 정렬을 어긋나게 함 */
+    transform: none;
+  }
+
+  /* 자막: 데스크톱의 QR 폭 예약(calc(100% - 480px))이 모바일에선 음수가 됨 → 전체 폭 사용 */
+  .stage-screen--live .stage-answer {
+    max-width: 100%;
+    font-size: 17px;
+    line-height: 1.4;
+    padding: 13px 16px;
+    border-radius: 16px;
+  }
+
+  .stage-question {
+    font-size: 12.5px;
+    padding: 8px 12px;
+  }
+
+  /* QR 대기 상태: 중앙 하단, 조금 작게 */
+  .stage-qr--idle {
+    bottom: 3.5%;
+    padding: 16px 20px;
+    gap: 10px;
+  }
+
+  .stage-qr--idle .stage-qr__img {
+    width: 132px;
+    height: 132px;
+  }
+
+  /* QR 말하는 중: 자막·로봇과 겹치지 않는 우상단 빈 공간으로 이동, 최소 크기 */
+  .stage-qr--compact {
+    top: 64px;
+    right: 10px;
+    bottom: auto;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 10px;
+    text-align: center;
+  }
+
+  .stage-qr--compact .stage-qr__img {
+    width: 78px;
+    height: 78px;
+  }
+
+  .stage-qr--compact .stage-qr__caption {
+    max-width: 96px;
+  }
+
+  .stage-qr--compact .stage-qr__caption strong {
+    font-size: 0.68rem;
+  }
+
+  .stage-qr--compact .stage-qr__caption span {
+    display: none;
+  }
+
+  /* 준비 칩·시작 스플래시도 모바일 크기 보정 */
+  .stage-preparing {
+    bottom: auto;
+    top: 64px;
+    left: 12px;
+    transform: none;
+    padding: 9px 14px;
+    font-size: 0.82rem;
+  }
+
+  .stage-start strong {
+    font-size: 1.5rem;
+  }
+
+  .stage-start > span:last-child {
+    padding: 0 24px;
+    text-align: center;
+  }
+}
