@@ -32,6 +32,8 @@ export interface LiveQuestion {
   approvedAt: number | null;
   answer: string | null;
   answerReady: boolean;
+  // 무대가 TTS 오디오 프리페치를 마쳤는지 (완료 전엔 운영 콘솔 재생 버튼 잠금)
+  audioReady: boolean;
 }
 
 export interface LiveControl {
@@ -65,7 +67,8 @@ function mapQuestion(id: string, data: DocumentData): LiveQuestion {
     createdAt: toMillis(data.createdAt),
     approvedAt: data.approvedAt ? toMillis(data.approvedAt) : null,
     answer: data.answer ? String(data.answer) : null,
-    answerReady: Boolean(data.answerReady)
+    answerReady: Boolean(data.answerReady),
+    audioReady: Boolean(data.audioReady)
   };
 }
 
@@ -175,7 +178,8 @@ export async function submitQuestion(submission: QuestionSubmission): Promise<vo
     createdAt: serverTimestamp(),
     approvedAt: null,
     answer: null,
-    answerReady: false
+    answerReady: false,
+    audioReady: false
   });
 }
 
@@ -208,6 +212,11 @@ export async function rejectQuestion(id: string): Promise<void> {
 
 export async function saveAnswer(id: string, answer: string): Promise<void> {
   await updateDoc(questionRef(id), { answer, answerReady: true, status: "answered" });
+}
+
+// 무대가 해당 질문의 TTS 오디오 프리페치를 마쳤음을 보고한다.
+export async function markAudioReady(id: string): Promise<void> {
+  await updateDoc(questionRef(id), { audioReady: true });
 }
 
 // 무대에서 해당 질문을 말하도록 제어 상태를 갱신한다(speakNonce 증가로 재트리거).

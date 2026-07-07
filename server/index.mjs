@@ -230,6 +230,20 @@ function cleanNickname(nickname) {
   return name;
 }
 
+// "~한 질문을 주셨네요!" 앞에 붙는 형용사 풀 — 매번 다른 칭찬으로 다채롭게
+const praiseAdjectives = [
+  "멋진",
+  "흥미로운",
+  "재미있는",
+  "날카로운",
+  "따끈따끈한",
+  "반짝이는",
+  "센스 있는",
+  "깊이 있는",
+  "정말 좋은",
+  "기다렸던"
+];
+
 // 주제를 참조하지 않는 자연스러운 인사(항상 문법적으로 안전)
 const genericLeads = [
   "좋은 질문이에요!",
@@ -238,20 +252,28 @@ const genericLeads = [
   "재미있는 질문이네요!"
 ];
 
+function randomOf(list) {
+  return list[Math.floor(Math.random() * list.length)];
+}
+
 // 질문 인사말 후보를 모은다. 닉네임 기반은 "님"이 붙어 항상 자연스럽고,
 // 명사 주제가 깨끗할 때만 조사 붙인 주제 인사를 추가한다.
 function acknowledgementCandidates(question, nickname) {
   const name = cleanNickname(nickname);
   const topic = questionTopic(question);
   const cleanTopic = isCleanNounTopic(topic) ? topic : "";
+  const adj = randomOf(praiseAdjectives);
 
   // 닉네임이 있으면 항상 "OO님..." 형식으로 부른다(참가자 흐름은 닉네임 필수).
   if (name) {
     const candidates = [
       `${name}님이 궁금해하신 내용이네요!`,
-      `${name}님께서 좋은 질문 주셨어요!`,
+      `${name}님께서 ${adj} 질문을 주셨네요!`,
+      `${name}님, ${adj} 질문이에요!`,
       `${name}님, 반가워요! 바로 답해드릴게요!`,
-      `${name}님이 물어봐 주셨네요!`
+      `${name}님이 물어봐 주셨네요!`,
+      `와, ${name}님! 이건 저도 신나는 주제예요!`,
+      `${name}님의 질문, 접수 완료! 삐빗!`
     ];
     if (cleanTopic) {
       candidates.push(
@@ -267,23 +289,23 @@ function acknowledgementCandidates(question, nickname) {
     return [
       `${cleanTopic}${subjectParticle(cleanTopic)} 궁금하시군요!`,
       `${cleanTopic}${topicParticle(cleanTopic)} 저도 관심 있어요!`,
-      `${cleanTopic}에 대해 질문해 주셨네요!`,
+      `${cleanTopic}에 대해 ${adj} 질문을 주셨네요!`,
       ...genericLeads
     ];
   }
 
-  return genericLeads;
+  return [`${adj} 질문을 주셨네요!`, ...genericLeads];
 }
 
 function questionAcknowledgement(question, nickname) {
   const candidates = acknowledgementCandidates(question, nickname);
-  // 질문+닉네임 조합으로 결정적 선택 → 같은 질문은 같은 인사, 전체적으로는 다양
-  return candidates[pickIndex(`${nickname || ""}::${question}`, candidates.length)];
+  // 랜덤 선택 — 연속된 질문마다 인사가 달라져 무대 진행이 단조롭지 않다
+  return randomOf(candidates);
 }
 
 function alreadyAcknowledgesQuestion(answer) {
   const opening = plainMcCopy(answer).slice(0, 90);
-  return /궁금해하신 내용|좋은 질문 주셨어요|바로 답해드릴게요|물어봐 주셨네요|궁금하시군요|관심\s*있어요|좋은\s*질문이에요|바로\s*알려드릴게요|궁금하셨겠어요|재미있는\s*질문이네요/u.test(
+  return /궁금해하신 내용|질문을 주셨네요|질문이에요|바로 답해드릴게요|물어봐 주셨네요|신나는 주제예요|접수 완료|궁금하시군요|관심\s*있어요|좋은\s*질문이에요|바로\s*알려드릴게요|궁금하셨겠어요|재미있는\s*질문이네요/u.test(
     opening
   );
 }

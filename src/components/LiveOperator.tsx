@@ -295,23 +295,27 @@ export function LiveOperator() {
                           const isRequested = speakRequestedId === q.id;
                           const stageBusy =
                             isNow && (control?.stageStatus === "preparing" || control?.stageStatus === "speaking");
+                          // 무대가 TTS 프리페치를 마쳐야(오디오 준비 완료) 재생 버튼이 열린다
+                          const audioPending = q.answerReady && !q.audioReady;
                           const label = isRequested
                             ? "무대로 전송 중…"
                             : isNow && control?.stageStatus === "preparing"
                               ? "음성 준비 중…"
                               : isNow && control?.stageStatus === "speaking"
                                 ? "재생 중…"
-                                : q.status === "spoken"
-                                  ? "다시 말하기"
-                                  : "무대에서 말하기";
+                                : audioPending
+                                  ? "음성 준비 중…"
+                                  : q.status === "spoken"
+                                    ? "다시 말하기"
+                                    : "무대에서 말하기";
                           return (
                             <button
                               type="button"
                               className={`live-btn live-btn--speak ${
-                                isRequested || stageBusy ? "live-btn--busy" : ""
+                                isRequested || stageBusy || audioPending ? "live-btn--busy" : ""
                               }`}
                               onClick={() => handleSpeak(q.id)}
-                              disabled={!q.answerReady || isRequested || stageBusy}
+                              disabled={!q.answerReady || audioPending || isRequested || stageBusy}
                             >
                               {label}
                             </button>

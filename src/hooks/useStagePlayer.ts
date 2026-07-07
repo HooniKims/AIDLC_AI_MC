@@ -51,7 +51,7 @@ export interface StagePlayer {
   // 브라우저 자동재생 차단으로 소리를 못 낸 상태 (화면 클릭으로 해제)
   audioBlocked: boolean;
   retryBlocked: () => void;
-  prepare: (text: string) => void;
+  prepare: (text: string) => Promise<boolean>;
   play: (text: string) => Promise<void>;
 }
 
@@ -218,14 +218,20 @@ export function useStagePlayer(): StagePlayer {
     return promise;
   }, []);
 
-  // 다가올 답변 오디오를 미리 받아 캐시(무음 분석까지). 실패는 조용히 무시.
+  // 다가올 답변 오디오를 미리 받아 캐시(무음 분석까지).
+  // 성공 여부를 돌려줘 호출자가 "음성 준비 완료"를 보고할 수 있게 한다.
   const prepare = useCallback(
-    (text: string) => {
+    async (text: string): Promise<boolean> => {
       const clean = plainMcCopy(text);
       if (!clean) {
-        return;
+        return false;
       }
-      void fetchAsset(clean).catch(() => undefined);
+      try {
+        await fetchAsset(clean);
+        return true;
+      } catch {
+        return false;
+      }
     },
     [fetchAsset]
   );

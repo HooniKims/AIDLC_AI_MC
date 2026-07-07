@@ -5,6 +5,7 @@ import { useStagePlayer } from "../hooks/useStagePlayer";
 import { isFirebaseConfigured } from "../lib/firebase";
 import {
   ensureControl,
+  markAudioReady,
   markSpoken,
   reportStageStatus,
   watchControl,
@@ -75,11 +76,18 @@ export function LiveStage() {
     [questions]
   );
 
+  // 프리페치 완료 시 audioReady를 보고해 운영 콘솔 버튼이 열리게 한다.
+  // (캐시 히트면 즉시 resolve되므로 중복 실행돼도 비용 없음)
   useEffect(() => {
     readyQueue.slice(0, PREFETCH_COUNT).forEach((q) => {
-      if (q.answer) {
-        player.prepare(q.answer);
+      if (!q.answer) {
+        return;
       }
+      void player.prepare(q.answer).then((ready) => {
+        if (ready && !q.audioReady) {
+          markAudioReady(q.id).catch(() => undefined);
+        }
+      });
     });
   }, [readyQueue, player]);
 
