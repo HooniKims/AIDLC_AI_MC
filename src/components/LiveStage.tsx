@@ -7,6 +7,7 @@ import {
   ensureControl,
   markAudioReady,
   markSpoken,
+  reportStageHeartbeat,
   reportStageStatus,
   watchControl,
   watchSessionQuestions,
@@ -144,6 +145,18 @@ export function LiveStage() {
           : "idle";
     reportStageStatus(status).catch(() => undefined);
   }, [configured, player.robotState, player.audioBlocked]);
+
+  // 무대 하트비트: 이 화면이 살아있음을 10초마다 알려 운영 콘솔이 연결 여부를 안다.
+  useEffect(() => {
+    if (!configured) {
+      return;
+    }
+    reportStageHeartbeat().catch(() => undefined);
+    const id = window.setInterval(() => {
+      reportStageHeartbeat().catch(() => undefined);
+    }, 10_000);
+    return () => window.clearInterval(id);
+  }, [configured]);
 
   if (!configured) {
     return (

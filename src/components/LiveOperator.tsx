@@ -46,8 +46,18 @@ export function LiveOperator() {
   const [failedIds, setFailedIds] = useState<Set<string>>(new Set());
   const [speakRequestedId, setSpeakRequestedId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [now, setNow] = useState(() => Date.now());
   const genLockRef = useRef(false);
   const configured = isFirebaseConfigured();
+
+  // 무대 연결 판정용 시계: 5초마다 갱신해 하트비트가 끊기면 오프라인으로 전환
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 5000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  // 무대 하트비트가 25초 이내면 무대 화면이 열려 있는 것으로 본다
+  const stageOnline = Boolean(control?.stageHeartbeat && now - control.stageHeartbeat < 25_000);
 
   useEffect(() => {
     if (!configured) {
@@ -188,6 +198,9 @@ export function LiveOperator() {
         </div>
         <div className="live-op-header__actions">
           <span className="live-op-stat">대기 {pending.length} · 큐 {answerQueue.length}</span>
+          <span className={`live-op-conn ${stageOnline ? "live-op-conn--on" : "live-op-conn--off"}`}>
+            {stageOnline ? "🟢 무대 연결됨" : "⚪ 무대 화면 열어주세요"}
+          </span>
           <a className="live-op-link" href="/stage" target="_blank" rel="noreferrer">
             무대 화면 열기 ↗
           </a>
@@ -208,6 +221,13 @@ export function LiveOperator() {
       {error ? (
         <p className="live-op-error" role="alert">
           {error}
+        </p>
+      ) : null}
+
+      {!stageOnline && answerQueue.length > 0 ? (
+        <p className="live-op-warn" role="alert">
+          무대 화면이 열려 있지 않아요. 음성은 무대 화면에서 준비됩니다 —
+          <a href="/stage" target="_blank" rel="noreferrer"> 무대 화면을 열고 "무대 시작하기"를 눌러주세요.</a>
         </p>
       ) : null}
 
@@ -295,8 +315,10 @@ export function LiveOperator() {
                           const isRequested = speakRequestedId === q.id;
                           const stageBusy =
                             isNow && (control?.stageStatus === "preparing" || control?.stageStatus === "speaking");
-                          // 무대가 TTS 프리페치를 마쳐야(오디오 준비 완료) 재생 버튼이 열린다
-                          const audioPending = q.answerReady && !q.audioReady;
+                          // 무대가 연결된 경우에만 프리페치 완료(audioReady)를 기다린다.
+                          // 무대가 꺼져 있으면 프리페치가 될 수 없으므로 답변만 준비되면 버튼을 연다
+                          // (누르면 무대가 켜졌을 때 그 자리에서 생성·재생).
+                          const audioPending = stageOnline && q.answerReady && !q.audioReady;
                           const label = isRequested
                             ? "무대로 전송 중…"
                             : isNow && control?.stageStatus === "preparing"

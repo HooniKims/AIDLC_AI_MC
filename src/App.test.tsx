@@ -38,6 +38,7 @@ vi.mock("./lib/liveQueue", () => ({
   requestSpeak: () => Promise.resolve(),
   markSpoken: () => Promise.resolve(),
   reportStageStatus: () => Promise.resolve(),
+  reportStageHeartbeat: () => Promise.resolve(),
   markAudioReady: () => Promise.resolve(),
   clearAllQuestions: () => Promise.resolve(0),
   deleteQuestion: () => Promise.resolve(),

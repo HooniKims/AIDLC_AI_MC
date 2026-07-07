@@ -1892,3 +1892,37 @@ textarea:focus {
     text-align: center;
   }
 }
+
+/* ===== 무대 연결 상태 표시 ===== */
+.live-op-conn {
+  font-size: 0.85rem;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.live-op-conn--on {
+  background: rgba(0, 244, 68, 0.16);
+  color: #12a150;
+}
+
+.live-op-conn--off {
+  background: rgba(180, 0, 78, 0.1);
+  color: #b3004e;
+}
+
+.live-op-warn {
+  margin: 0 4px 12px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #fff4e0;
+  color: #92500a;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.live-op-warn a {
+  color: #b3004e;
+  font-weight: 800;
+}
