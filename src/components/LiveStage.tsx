@@ -6,10 +6,12 @@ import { isFirebaseConfigured } from "../lib/firebase";
 import {
   ensureControl,
   markSpoken,
+  reportStageStatus,
   watchControl,
   watchSessionQuestions,
   type LiveControl,
-  type LiveQuestion
+  type LiveQuestion,
+  type StageStatus
 } from "../lib/liveQueue";
 
 // 답변 준비된 질문의 TTS를 미리 받아둘 개수. Gemini 생성이 10~20초 걸리므로
@@ -117,6 +119,21 @@ export function LiveStage() {
       });
   }, [control, questions, player]);
 
+  // 무대 재생 상태를 제어 문서로 보고 → 운영 콘솔이 "클릭 반응"을 실시간 표시
+  useEffect(() => {
+    if (!configured) {
+      return;
+    }
+    const status: StageStatus = player.audioBlocked
+      ? "blocked"
+      : player.robotState === "speaking"
+        ? "speaking"
+        : player.robotState === "thinking"
+          ? "preparing"
+          : "idle";
+    reportStageStatus(status).catch(() => undefined);
+  }, [configured, player.robotState, player.audioBlocked]);
+
   if (!configured) {
     return (
       <main className="stage-screen">
@@ -148,6 +165,20 @@ export function LiveStage() {
           <span>궁금한 걸 남기면 AI MC가 답해드려요</span>
         </div>
       </aside>
+
+      {player.robotState === "thinking" ? (
+        <div className="stage-preparing" role="status">
+          <span className="stage-preparing__dots" aria-hidden="true" />
+          삐빗! 답변 음성을 준비하고 있어요
+        </div>
+      ) : null}
+
+      {player.audioBlocked ? (
+        <button type="button" className="stage-audio-unlock" onClick={player.retryBlocked}>
+          <strong>🔊 소리가 차단됐어요</strong>
+          <span>화면을 한 번 클릭하면 답변을 재생해요</span>
+        </button>
+      ) : null}
     </main>
   );
 }

@@ -44,6 +44,7 @@ export function LiveOperator() {
   const [questions, setQuestions] = useState<LiveQuestion[]>([]);
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [failedIds, setFailedIds] = useState<Set<string>>(new Set());
+  const [speakRequestedId, setSpeakRequestedId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const genLockRef = useRef(false);
   const configured = isFirebaseConfigured();
@@ -118,6 +119,16 @@ export function LiveOperator() {
       });
   }, [answerQueue, failedIds]);
 
+  // 무대가 상태를 보고하기 시작하면(준비/재생) 로컬 "전송 중" 표시를 해제한다
+  useEffect(() => {
+    if (!speakRequestedId || !control) {
+      return;
+    }
+    if (control.nowPlayingId === speakRequestedId && control.stageStatus !== "idle") {
+      setSpeakRequestedId(null);
+    }
+  }, [control, speakRequestedId]);
+
   const handleApprove = useCallback((id: string) => {
     approveQuestion(id).catch(() => setError("승인에 실패했습니다."));
   }, []);
@@ -134,7 +145,12 @@ export function LiveOperator() {
   }, []);
 
   const handleSpeak = useCallback((id: string) => {
-    requestSpeak(id).catch(() => setError("무대 재생 요청에 실패했습니다."));
+    // 클릭 즉시 로컬 피드백 → 무대가 상태를 보고하면(stageStatus) 그걸로 대체
+    setSpeakRequestedId(id);
+    requestSpeak(id).catch(() => {
+      setSpeakRequestedId(null);
+      setError("무대 재생 요청에 실패했습니다.");
+    });
   }, []);
 
   const handleRetry = useCallback((id: string) => {
@@ -250,7 +266,13 @@ export function LiveOperator() {
                       <span className="live-q-order">{index + 1}</span>
                       <span className="live-q-badge">{q.affiliation}</span>
                       <span className="live-q-nick">{q.nickname}</span>
-                      {isNow ? <span className="live-q-now">● 무대 송출 중</span> : null}
+                      {isNow && control?.stageStatus === "speaking" ? (
+                        <span className="live-q-now">● 무대 송출 중</span>
+                      ) : isNow && control?.stageStatus === "preparing" ? (
+                        <span className="live-q-now live-q-now--preparing">⏳ 무대 준비 중</span>
+                      ) : isNow && control?.stageStatus === "blocked" ? (
+                        <span className="live-q-now live-q-now--blocked">🔇 무대 화면 클릭 필요</span>
+                      ) : null}
                       {q.status === "spoken" ? <span className="live-q-done">완료</span> : null}
                     </div>
                     <p className="live-q-text">{q.text}</p>
@@ -269,14 +291,32 @@ export function LiveOperator() {
                           재시도
                         </button>
                       ) : (
-                        <button
-                          type="button"
-                          className="live-btn live-btn--speak"
-                          onClick={() => handleSpeak(q.id)}
-                          disabled={!q.answerReady}
-                        >
-                          {q.status === "spoken" ? "다시 말하기" : "무대에서 말하기"}
-                        </button>
+                        (() => {
+                          const isRequested = speakRequestedId === q.id;
+                          const stageBusy =
+                            isNow && (control?.stageStatus === "preparing" || control?.stageStatus === "speaking");
+                          const label = isRequested
+                            ? "무대로 전송 중…"
+                            : isNow && control?.stageStatus === "preparing"
+                              ? "음성 준비 중…"
+                              : isNow && control?.stageStatus === "speaking"
+                                ? "재생 중…"
+                                : q.status === "spoken"
+                                  ? "다시 말하기"
+                                  : "무대에서 말하기";
+                          return (
+                            <button
+                              type="button"
+                              className={`live-btn live-btn--speak ${
+                                isRequested || stageBusy ? "live-btn--busy" : ""
+                              }`}
+                              onClick={() => handleSpeak(q.id)}
+                              disabled={!q.answerReady || isRequested || stageBusy}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })()
                       )}
                       <button type="button" className="live-btn live-btn--reject" onClick={() => handleDelete(q.id)}>
                         삭제

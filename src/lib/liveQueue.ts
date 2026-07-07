@@ -38,7 +38,11 @@ export interface LiveControl {
   sessionId: string;
   nowPlayingId: string | null;
   speakNonce: number;
+  // 무대 재생 상태: 운영 콘솔이 "클릭이 먹혔는지"를 실시간으로 보여주기 위한 값
+  stageStatus: StageStatus;
 }
+
+export type StageStatus = "idle" | "preparing" | "speaking" | "blocked";
 
 const QUESTIONS = "questions";
 const CONTROL_DOC = "control/live";
@@ -101,9 +105,15 @@ export function watchControl(callback: (control: LiveControl | null) => void): (
     callback({
       sessionId: String(data.sessionId ?? ""),
       nowPlayingId: data.nowPlayingId ? String(data.nowPlayingId) : null,
-      speakNonce: Number(data.speakNonce ?? 0)
+      speakNonce: Number(data.speakNonce ?? 0),
+      stageStatus: (data.stageStatus ?? "idle") as StageStatus
     });
   });
+}
+
+// 무대가 자신의 재생 상태를 보고한다 (운영 콘솔 실시간 피드백용). 실패는 무시해도 무방.
+export async function reportStageStatus(status: StageStatus): Promise<void> {
+  await updateDoc(controlRef(), { stageStatus: status, updatedAt: serverTimestamp() });
 }
 
 // 세션의 모든 질문 문서를 삭제한다 (닉네임·소속 등 개인정보 정리용).

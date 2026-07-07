@@ -48,6 +48,9 @@ export interface StagePlayer {
   captionCueIndex: number;
   isSpeaking: boolean;
   spokenText: string;
+  // 브라우저 자동재생 차단으로 소리를 못 낸 상태 (화면 클릭으로 해제)
+  audioBlocked: boolean;
+  retryBlocked: () => void;
   prepare: (text: string) => void;
   play: (text: string) => Promise<void>;
 }
@@ -58,6 +61,8 @@ export function useStagePlayer(): StagePlayer {
   const [captionCueIndex, setCaptionCueIndex] = useState(0);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [spokenText, setSpokenText] = useState("");
+  const [audioBlocked, setAudioBlocked] = useState(false);
+  const blockedTextRef = useRef<string | null>(null);
 
   const cacheRef = useRef<Map<string, SpeechAsset>>(new Map());
   const pendingRef = useRef<Map<string, Promise<SpeechAsset>>>(new Map());
@@ -299,6 +304,15 @@ export function useStagePlayer(): StagePlayer {
             reject(caught);
           });
         });
+        setAudioBlocked(false);
+        blockedTextRef.current = null;
+      } catch (caught) {
+        // 브라우저 자동재생 정책 차단: 화면 클릭 한 번으로 재시도할 수 있게 기억해 둔다
+        if ((caught as DOMException)?.name === "NotAllowedError") {
+          blockedTextRef.current = clean;
+          setAudioBlocked(true);
+        }
+        throw caught;
       } finally {
         setIsSpeaking(false);
         setRobotState("idle");
@@ -307,5 +321,26 @@ export function useStagePlayer(): StagePlayer {
     [fetchAsset]
   );
 
-  return { robotState, lipFrame, captionCueIndex, isSpeaking, spokenText, prepare, play };
+  // 자동재생 차단 해제: 사용자 클릭(제스처) 안에서 재생을 다시 시도한다
+  const retryBlocked = useCallback(() => {
+    const text = blockedTextRef.current;
+    if (!text) {
+      setAudioBlocked(false);
+      return;
+    }
+    setAudioBlocked(false);
+    void play(text).catch(() => undefined);
+  }, [play]);
+
+  return {
+    robotState,
+    lipFrame,
+    captionCueIndex,
+    isSpeaking,
+    spokenText,
+    audioBlocked,
+    retryBlocked,
+    prepare,
+    play
+  };
 }

@@ -35,6 +35,9 @@ vi.mock("./lib/liveQueue", () => ({
   saveAnswer: () => Promise.resolve(),
   requestSpeak: () => Promise.resolve(),
   markSpoken: () => Promise.resolve(),
+  reportStageStatus: () => Promise.resolve(),
+  clearAllQuestions: () => Promise.resolve(0),
+  deleteQuestion: () => Promise.resolve(),
   submitQuestion: () => Promise.resolve()
 }));
 
