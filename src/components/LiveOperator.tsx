@@ -4,8 +4,9 @@ import { plainMcCopy } from "../lib/mcFlow";
 import { authedFetch } from "../lib/operatorAuth";
 import {
   approveQuestion,
+  clearAllQuestions,
+  deleteQuestion,
   ensureControl,
-  rejectQuestion,
   requestSpeak,
   resetSession,
   saveAnswer,
@@ -23,11 +24,12 @@ function byCreatedAt(a: LiveQuestion, b: LiveQuestion) {
   return a.createdAt - b.createdAt;
 }
 
-async function generateAnswerText(questionText: string): Promise<string> {
+async function generateAnswerText(questionText: string, nickname: string): Promise<string> {
   const response = await authedFetch("/api/generate-answer", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question: questionText })
+    // 닉네임을 함께 보내 "{닉네임}님이 궁금해하신 내용이네요!"처럼 자연스러운 인사말을 만든다
+    body: JSON.stringify({ question: questionText, nickname })
   });
   const payload = await response.json();
   if (!response.ok) {
@@ -99,7 +101,7 @@ export function LiveOperator() {
     }
     genLockRef.current = true;
     setGeneratingId(target.id);
-    generateAnswerText(target.text)
+    generateAnswerText(target.text, target.nickname)
       .then((answer) => {
         if (!answer) {
           throw new Error("빈 답변");
@@ -120,8 +122,15 @@ export function LiveOperator() {
     approveQuestion(id).catch(() => setError("승인에 실패했습니다."));
   }, []);
 
-  const handleReject = useCallback((id: string) => {
-    rejectQuestion(id).catch(() => setError("거절에 실패했습니다."));
+  const handleDelete = useCallback((id: string) => {
+    deleteQuestion(id).catch(() => setError("삭제에 실패했습니다."));
+  }, []);
+
+  const handleClearAll = useCallback(() => {
+    if (!window.confirm("현재 모든 질문(닉네임·소속 포함)을 영구 삭제할까요? 세션(QR 주소)은 그대로 유지됩니다.")) {
+      return;
+    }
+    clearAllQuestions().catch(() => setError("전체 삭제에 실패했습니다."));
   }, []);
 
   const handleSpeak = useCallback((id: string) => {
@@ -166,6 +175,14 @@ export function LiveOperator() {
           <a className="live-op-link" href="/stage" target="_blank" rel="noreferrer">
             무대 화면 열기 ↗
           </a>
+          <button
+            type="button"
+            className="live-op-reset"
+            onClick={handleClearAll}
+            disabled={pending.length + answerQueue.length === 0}
+          >
+            전체 삭제
+          </button>
           <button type="button" className="live-op-reset" onClick={handleReset}>
             세션 리셋
           </button>
@@ -199,8 +216,8 @@ export function LiveOperator() {
                     <button type="button" className="live-btn live-btn--approve" onClick={() => handleApprove(q.id)}>
                       승인
                     </button>
-                    <button type="button" className="live-btn live-btn--reject" onClick={() => handleReject(q.id)}>
-                      거절
+                    <button type="button" className="live-btn live-btn--reject" onClick={() => handleDelete(q.id)}>
+                      삭제
                     </button>
                   </div>
                 </article>
@@ -261,8 +278,8 @@ export function LiveOperator() {
                           {q.status === "spoken" ? "다시 말하기" : "무대에서 말하기"}
                         </button>
                       )}
-                      <button type="button" className="live-btn live-btn--reject" onClick={() => handleReject(q.id)}>
-                        빼기
+                      <button type="button" className="live-btn live-btn--reject" onClick={() => handleDelete(q.id)}>
+                        삭제
                       </button>
                     </div>
                   </article>

@@ -41,13 +41,19 @@ function clientKey(request) {
 
 dotenv.config();
 
+// 공식 사이트(adl-confesta.kr) 확인 사실 기반. 확인되지 않은 세부 시간/강사는 넣지 않는다.
 const eventBrief = `
-행사명: 2026 AI·디지털 러닝 콘페스타
-일정: 2026년 7월 24일(금)부터 7월 25일(토)
-장소: 코엑스 마곡 르웨스트홀 및 회의실 4F
-대상: 교원, 교육전문직, 학부모, 예비교원, 일반 시민
-주요 프로그램: 비전특강 및 선포식, 컨퍼런스, 수업나눔, 선도교사 네트워킹과 공유회, 학부모 특강, 누구나 개발자 해커톤
+행사명: 2026 AI·디지털 러닝 콘페스타 (AI·Digital Learning Confesta)
+주최: 서울특별시교육청
+일정: 2026년 7월 24일(금) ~ 7월 25일(토), 이틀간
+장소: 코엑스 마곡(Coex 마곡) 르웨스트홀 및 회의실 4층
+대상: 교원, 교육전문직, 학부모, 예비교원, 학생, 일반 시민
+행사 성격: "컨퍼런스의 깊이와 페스티벌의 설렘이 만나는" 열린 교육 축제. AI·디지털로 달라진 수업 사례와 아이들의 성장 경험을 함께 나누고 성찰하는 자리.
+주요 프로그램: 비전특강 및 선포식, 컨퍼런스 특강, 수업나눔, 선도교사 네트워킹·공유회, 학부모 특강, 누구나 개발자 해커톤 (세부 시간표는 공식 사이트에서 안내)
+참가 신청: 공식 사이트의 "내 콘페스타 골라담기 / 나만의 3스쿱"으로 관심 세션을 담아 신청 (아이스크림 3스쿱 콘셉트)
+운영사무국: (주)엠앤씨커뮤니케이션즈 · 문의 010-2292-5528 · ailearningconfesta@gmail.com
 공식 사이트: https://adl-confesta.kr/
+안내 원칙: 세부 시간표·강사·참가비 등 사이트에 명시되지 않은 정보는 단정하지 말고 "공식 사이트나 운영사무국에서 확인해 주세요"로 안내한다.
 `.trim();
 
 const mcInstructions = `
@@ -152,45 +158,143 @@ function subjectParticle(text) {
   return hasFinalConsonant(text) ? "이" : "가";
 }
 
+function topicParticle(text) {
+  return hasFinalConsonant(text) ? "은" : "는";
+}
+
+// 질문에서 핵심 명사구(주제)를 뽑는다. 질문 술어(동사 어미)와 뒤따르는 조사를 걷어낸다.
 function questionTopic(question) {
-  const topic = plainMcCopy(question)
+  let topic = plainMcCopy(question)
     .replace(/^[Qq][.:：]\s*/u, "")
-    .replace(/[?!.,。！？]+$/u, "")
-    .replace(/\s*(이|가|은|는)?\s*(어떻게\s*(되나요|되죠|됩니까|될까요)|어디인가요|어디예요|어디죠|언제인가요|언제예요|무엇인가요|무엇이에요|뭔가요|뭐예요|있나요|있을까요|알\s*수\s*있나요|알려\s*주세요|궁금해요|궁금합니다|부탁해요|인가요|나요|까요)\s*$/u, "")
-    .replace(/\s+/g, " ")
+    .replace(/[?!.,。！？]+$/gu, "")
     .trim();
 
-  return topic || plainMcCopy(question).replace(/[?!.,。！？]+$/u, "").trim() || "그 부분";
+  // 의문사부터 끝까지 제거: "... 어떻게 바꾸나요" → "..." (한글엔 \b가 안 통해 미사용)
+  topic = topic.replace(
+    /\s*(어떻게|어떤|어느|무엇을|무엇이|무엇|무슨|뭐를|뭐|뭘|몇|언제|어디서|어디에|어디|왜|누가|누구를|누구|얼마나|얼마)[\s\S]*$/u,
+    ""
+  );
+
+  // 흔한 트레일링 술어 제거
+  topic = topic.replace(
+    /\s*(알려\s*주세요|추천\s*해?\s*주세요|해\s*주세요|가능한가요?|되나요|되죠|됩니까|될까요|하나요|할까요|있나요|있을까요|인가요|맞나요|궁금(해요|합니다)|주세요)\s*$/u,
+    ""
+  );
+
+  // 트레일링 조사 제거 → 순수 명사에 가깝게
+  topic = topic
+    .replace(/\s+/gu, " ")
+    .trim()
+    .replace(/(은|는|이|가|을|를|와|과|에서|에게|에|도|만|의|으로|로|까지|부터)$/u, "")
+    .trim();
+
+  return topic;
 }
 
-function questionLeadIndex(topic) {
-  return Array.from(topic).reduce((sum, char) => sum + char.codePointAt(0), 0) % 4;
+// 조사를 붙여도 자연스러운 "깨끗한 명사구"인지 엄격 판정.
+// 애매하면 false → 주제 참조 대신 일반 인사를 써서 어색함을 원천 차단한다.
+function isCleanNounTopic(topic) {
+  if (!topic || topic.length < 2 || topic.length > 12) {
+    return false;
+  }
+  // 단어 3개 이하(명사구는 대개 짧다)
+  if (topic.split(" ").length > 3) {
+    return false;
+  }
+  const lastChar = Array.from(topic).at(-1);
+  if (!/[가-힣]/u.test(lastChar)) {
+    return false; // 영문/숫자/기호로 끝나면 조사 부착이 어색
+  }
+  // 종결·연결 어미나 용언 활용 흔적이 남아 있으면 명사가 아님
+  if (/(요|죠|다|까|자|네|군|나|지|랴|려|해|함|됨|음|할|될|볼|줄|수|야|워|어|아)$/u.test(topic)) {
+    return false;
+  }
+  // 용언 어간이 중간에 보이면(…할 …, 배워, 참여할 등) 문장으로 간주
+  if (/(할\s|볼\s|들\s|배워|참여|바꾸|되는|하는|있는)/u.test(topic)) {
+    return false;
+  }
+  return true;
 }
 
-function questionAcknowledgement(question) {
+function pickIndex(text, mod) {
+  const sum = Array.from(text || "x").reduce((acc, char) => acc + char.codePointAt(0), 0);
+  return sum % mod;
+}
+
+// 닉네임을 무대에서 부르기 안전하게 다듬는다(길이·공백 정리).
+function cleanNickname(nickname) {
+  const name = String(nickname || "").replace(/\s+/gu, " ").trim();
+  if (!name || name.length > 20) {
+    return "";
+  }
+  return name;
+}
+
+// 주제를 참조하지 않는 자연스러운 인사(항상 문법적으로 안전)
+const genericLeads = [
+  "좋은 질문이에요!",
+  "네, 바로 알려드릴게요!",
+  "궁금하셨겠어요!",
+  "재미있는 질문이네요!"
+];
+
+// 질문 인사말 후보를 모은다. 닉네임 기반은 "님"이 붙어 항상 자연스럽고,
+// 명사 주제가 깨끗할 때만 조사 붙인 주제 인사를 추가한다.
+function acknowledgementCandidates(question, nickname) {
+  const name = cleanNickname(nickname);
   const topic = questionTopic(question);
-  const leads = [
-    `${topic}${subjectParticle(topic)} 궁금하시군요!`,
-    `${topic}에 대해 질문해 주셨네요!`,
-    `${topic}부터 함께 살펴볼게요!`,
-    `${topic}${subjectParticle(topic)} 핵심이군요!`
-  ];
+  const cleanTopic = isCleanNounTopic(topic) ? topic : "";
 
-  return leads[questionLeadIndex(topic)];
+  // 닉네임이 있으면 항상 "OO님..." 형식으로 부른다(참가자 흐름은 닉네임 필수).
+  if (name) {
+    const candidates = [
+      `${name}님이 궁금해하신 내용이네요!`,
+      `${name}님께서 좋은 질문 주셨어요!`,
+      `${name}님, 반가워요! 바로 답해드릴게요!`,
+      `${name}님이 물어봐 주셨네요!`
+    ];
+    if (cleanTopic) {
+      candidates.push(
+        `${name}님, ${cleanTopic}${subjectParticle(cleanTopic)} 궁금하시군요!`,
+        `${name}님이 ${cleanTopic}에 대해 물어보셨어요!`
+      );
+    }
+    return candidates;
+  }
+
+  // 닉네임이 없을 때(리허설 등): 깨끗한 주제면 주제 참조, 아니면 일반 인사
+  if (cleanTopic) {
+    return [
+      `${cleanTopic}${subjectParticle(cleanTopic)} 궁금하시군요!`,
+      `${cleanTopic}${topicParticle(cleanTopic)} 저도 관심 있어요!`,
+      `${cleanTopic}에 대해 질문해 주셨네요!`,
+      ...genericLeads
+    ];
+  }
+
+  return genericLeads;
+}
+
+function questionAcknowledgement(question, nickname) {
+  const candidates = acknowledgementCandidates(question, nickname);
+  // 질문+닉네임 조합으로 결정적 선택 → 같은 질문은 같은 인사, 전체적으로는 다양
+  return candidates[pickIndex(`${nickname || ""}::${question}`, candidates.length)];
 }
 
 function alreadyAcknowledgesQuestion(answer) {
   const opening = plainMcCopy(answer).slice(0, 90);
-  return /궁금하시군요|질문해\s*주셨네요|함께\s*살펴볼게요|핵심이군요/u.test(opening);
+  return /궁금해하신 내용|좋은 질문 주셨어요|바로 답해드릴게요|물어봐 주셨네요|궁금하시군요|관심\s*있어요|좋은\s*질문이에요|바로\s*알려드릴게요|궁금하셨겠어요|재미있는\s*질문이네요/u.test(
+    opening
+  );
 }
 
-function answerWithQuestionAcknowledgement(question, answer) {
+function answerWithQuestionAcknowledgement(question, answer, nickname) {
   const cleanAnswer = plainMcCopy(answer);
   if (!cleanAnswer || alreadyAcknowledgesQuestion(cleanAnswer)) {
     return cleanAnswer;
   }
 
-  return `${questionAcknowledgement(question)} ${cleanAnswer}`.trim();
+  return `${questionAcknowledgement(question, nickname)} ${cleanAnswer}`.trim();
 }
 
 function ttsSpeed(env) {
@@ -608,6 +712,7 @@ export function createApp(options = {}) {
     }
     refreshRuntimeEnv(env, rootDir);
     const question = String(request.body?.question || "").trim().slice(0, maxQuestionChars);
+    const nickname = String(request.body?.nickname || "").trim().slice(0, 20);
 
     if (!question) {
       response.status(400).json({ error: "질문을 입력해 주세요." });
@@ -631,7 +736,7 @@ export function createApp(options = {}) {
         instructions: mcInstructions,
         input: `관객 질문: ${question}`
       });
-      const answer = answerWithQuestionAcknowledgement(question, extractOutputText(result));
+      const answer = answerWithQuestionAcknowledgement(question, extractOutputText(result), nickname);
 
       response.json({
         answer: answer || "답변을 생성하지 못했습니다. 질문을 조금 다르게 입력해 주세요.",

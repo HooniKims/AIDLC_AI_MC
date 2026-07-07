@@ -142,6 +142,12 @@ export async function deleteQuestion(id: string): Promise<void> {
   await deleteDoc(doc(getDb(), QUESTIONS, id));
 }
 
+// 세션은 유지하고 질문(개인정보)만 전부 삭제. 세션 리셋과 달리 새 세션을 열지 않아,
+// 참가자 QR 주소가 그대로 유지되면서 큐만 비운다.
+export async function clearAllQuestions(): Promise<number> {
+  return deleteAllQuestions();
+}
+
 export interface QuestionSubmission {
   sessionId: string;
   text: string;

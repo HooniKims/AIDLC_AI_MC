@@ -1,5 +1,5 @@
 import { initializeApp, type FirebaseApp } from "firebase/app";
-import { getFirestore, type Firestore } from "firebase/firestore";
+import { initializeFirestore, type Firestore } from "firebase/firestore";
 
 // Firebase 웹 config는 클라이언트에 공개돼도 되는 값이다(보안은 Firestore 규칙으로 처리).
 // Vite가 VITE_ 접두사 변수만 클라이언트 번들에 노출한다.
@@ -33,7 +33,12 @@ export function getFirebaseApp(): FirebaseApp {
 
 export function getDb(): Firestore {
   if (!cachedDb) {
-    cachedDb = getFirestore(getFirebaseApp());
+    // 기본 WebChannel 전송이 일부 네트워크(사내 와이파이·VPN·프록시)에서 막혀
+    // onSnapshot 실시간 갱신이 안 오는 경우가 있다. long-polling 자동 감지로
+    // 그런 환경에서도 실시간 큐가 새로고침 없이 갱신되게 한다.
+    cachedDb = initializeFirestore(getFirebaseApp(), {
+      experimentalAutoDetectLongPolling: true
+    });
   }
   return cachedDb;
 }

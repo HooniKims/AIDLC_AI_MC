@@ -130,9 +130,25 @@ describe("AI MC API", () => {
       .send({ question: "행사 장소와 일정이 어떻게 되나요?" })
       .expect(200);
 
-    expect(response.body.answer).toMatch(/^행사 장소와 일정/);
-    expect(response.body.answer).toMatch(/궁금하시군요|질문해 주셨네요|살펴볼게요|핵심이군요/);
+    // 자연스러운 인사말로 시작하고 본문에 실제 답변(코엑스 마곡)이 이어진다
+    expect(response.body.answer).toMatch(
+      /궁금하시군요|질문해 주셨네요|관심 있어요|좋은 질문이에요|바로 알려드릴게요|궁금하셨겠어요|재미있는 질문이네요/
+    );
     expect(response.body.answer).toContain("코엑스 마곡");
+  });
+
+  it("addresses the participant by nickname when provided", async () => {
+    const openai = createMockOpenAI();
+    const app = createApp({ openai, env: { OPENAI_API_KEY: "test-key" } });
+
+    const response = await request(app)
+      .post("/api/generate-answer")
+      .send({ question: "점심은 제공되나요?", nickname: "김선생" })
+      .expect(200);
+
+    // 닉네임이 있으면 항상 "OO님..." 형식으로 부른다(조사 깨짐 없음)
+    expect(response.body.answer).toContain("김선생님");
+    expect(response.body.answer).not.toMatch(/제공되[가이] 궁금/);
   });
 
   it("rejects empty questions before calling OpenAI", async () => {
